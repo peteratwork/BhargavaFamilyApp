@@ -1,0 +1,51 @@
+workflows:
+  ios-simulator-build:
+    name: iOS simulator build
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      xcode: latest
+    scripts:
+      - name: Build for iOS Simulator
+        script: |
+          xcodebuild \
+            -project BhargavaFamilyApp.xcodeproj \
+            -scheme BhargavaFamilyApp \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+    artifacts:
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/Products/Debug-iphonesimulator/*.app
+
+  ios-release-archive:
+    name: iOS release archive
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      xcode: latest
+      vars:
+        BUNDLE_ID: com.bhargava.familyapp
+      # Add signing in Codemagic UI before running this workflow:
+      # 1. Upload or connect App Store Connect API key.
+      # 2. Enable automatic code signing for BUNDLE_ID, or provide certificate/profile.
+    scripts:
+      - name: Archive signed iOS app
+        script: |
+          xcodebuild \
+            -project BhargavaFamilyApp.xcodeproj \
+            -scheme BhargavaFamilyApp \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$CM_BUILD_DIR/build/BhargavaFamilyApp.xcarchive" \
+            archive
+      - name: Export IPA
+        script: |
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$CM_BUILD_DIR/build/BhargavaFamilyApp.xcarchive" \
+            -exportPath "$CM_BUILD_DIR/build/ios/ipa" \
+            -exportOptionsPlist "$CM_BUILD_DIR/ExportOptions.plist"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - build/BhargavaFamilyApp.xcarchive
