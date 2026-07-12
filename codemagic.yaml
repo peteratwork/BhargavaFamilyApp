@@ -22,6 +22,8 @@ workflows:
     name: iOS release archive
     instance_type: mac_mini_m2
     max_build_duration: 60
+    integrations:
+      app_store_connect: bhargava-family-appstore
     environment:
       xcode: latest
       vars:
@@ -44,3 +46,8 @@ workflows:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
+        submit_to_app_store: false
