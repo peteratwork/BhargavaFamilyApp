@@ -2,7 +2,6 @@ import AppIntents
 import Combine
 import Foundation
 
-@MainActor
 final class AppIntentRouter: ObservableObject {
     static let shared = AppIntentRouter()
     @Published var requestedTab: AppTab?
