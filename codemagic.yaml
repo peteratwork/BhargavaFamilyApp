@@ -34,23 +34,13 @@ workflows:
     scripts:
       - name: Set up code signing settings on Xcode project
         script: |
-          xcode-project use-profiles
-      - name: Archive signed iOS app
+          xcode-project use-profiles --archive-method=app-store
+      - name: Build signed IPA for distribution
         script: |
-          xcodebuild \
-            -project BhargavaFamilyApp.xcodeproj \
-            -scheme BhargavaFamilyApp \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath "$CM_BUILD_DIR/build/BhargavaFamilyApp.xcarchive" \
-            archive
-      - name: Export IPA
-        script: |
-          xcodebuild \
-            -exportArchive \
-            -archivePath "$CM_BUILD_DIR/build/BhargavaFamilyApp.xcarchive" \
-            -exportPath "$CM_BUILD_DIR/build/ios/ipa" \
-            -exportOptionsPlist "$CM_BUILD_DIR/ExportOptions.plist"
+          xcode-project build-ipa \
+            --project "$CM_BUILD_DIR/BhargavaFamilyApp.xcodeproj" \
+            --scheme "BhargavaFamilyApp"
     artifacts:
       - build/ios/ipa/*.ipa
-      - build/BhargavaFamilyApp.xcarchive
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
