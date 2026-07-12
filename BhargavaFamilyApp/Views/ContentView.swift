@@ -193,7 +193,7 @@ struct ProfileView: View {
                     LabeledContent("Verification", value: store.currentMember.verificationStatus.label)
                 }
 
-                Section("Sign up or claim profile") {
+                Section {
                     TextField("Full legal name", text: $store.signupDraft.fullName)
                     DatePicker("Date of birth", selection: $store.signupDraft.dateOfBirth, displayedComponents: .date)
                     TextField("Current residence", text: $store.signupDraft.city)
@@ -206,6 +206,8 @@ struct ProfileView: View {
                     } label: {
                         Label("Submit for verification", systemImage: "checkmark.seal")
                     }
+                } header: {
+                    Text("Sign up or claim profile")
                 } footer: {
                     Text("A real backend should verify phone ownership and route the true-name claim to trusted family elders before publishing it.")
                 }
