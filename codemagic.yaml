@@ -26,10 +26,15 @@ workflows:
       xcode: latest
       vars:
         BUNDLE_ID: com.bhargava.familyapp
-      # Add signing in Codemagic UI before running this workflow:
-      # 1. Upload or connect App Store Connect API key.
-      # 2. Enable automatic code signing for BUNDLE_ID, or provide certificate/profile.
+      ios_signing:
+        provisioning_profiles:
+          - bhargava_app_store_profile
+        certificates:
+          - bhargava_distribution
     scripts:
+      - name: Set up code signing settings on Xcode project
+        script: |
+          xcode-project use-profiles
       - name: Archive signed iOS app
         script: |
           xcodebuild \
