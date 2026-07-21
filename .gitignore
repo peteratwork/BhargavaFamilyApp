@@ -2,3 +2,4 @@
 node_modules/
 supabase/.branches/
 supabase/.temp/
+__pycache__/
