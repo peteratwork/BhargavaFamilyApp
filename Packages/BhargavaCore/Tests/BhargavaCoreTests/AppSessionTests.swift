@@ -106,6 +106,41 @@ final class AppSessionTests: XCTestCase {
         XCTAssertEqual(session.state, .awaitingEmail(email: "unknown@example.com"))
     }
 
+    func testValidEmailOTPVerifiesAndRoutesToPendingClaim() async {
+        let repository = StubAuthenticationRepository(restoredUser: nil)
+        let session = AppSession(repository: repository, initialState: .awaitingEmail(email: "member@example.com"))
+
+        await session.verifyOTP(email: "member@example.com", code: "123456")
+
+        XCTAssertEqual(repository.verifiedOTPs, ["member@example.com:123456"])
+        XCTAssertFalse(session.otpVerificationFailed)
+        XCTAssertEqual(session.state, .pendingClaim)
+    }
+
+    func testMalformedEmailOTPStaysOnEntryWithoutCallingRepository() async {
+        let repository = StubAuthenticationRepository(restoredUser: nil)
+        let session = AppSession(repository: repository, initialState: .awaitingEmail(email: "member@example.com"))
+
+        await session.verifyOTP(email: "member@example.com", code: "12ab")
+
+        XCTAssertEqual(repository.verifiedOTPs, [])
+        XCTAssertTrue(session.otpVerificationFailed)
+        XCTAssertEqual(session.state, .awaitingEmail(email: "member@example.com"))
+    }
+
+    func testRejectedEmailOTPStaysOnEntryForRetry() async {
+        let repository = StubAuthenticationRepository(
+            restoredUser: nil,
+            verificationError: StubError.requestFailed
+        )
+        let session = AppSession(repository: repository, initialState: .awaitingEmail(email: "member@example.com"))
+
+        await session.verifyOTP(email: "member@example.com", code: "123456")
+
+        XCTAssertTrue(session.otpVerificationFailed)
+        XCTAssertEqual(session.state, .awaitingEmail(email: "member@example.com"))
+    }
+
     func testInvalidEmailDoesNotReachRepository() async {
         let repository = StubAuthenticationRepository(restoredUser: nil)
         let session = AppSession(repository: repository, initialState: .signedOut)
@@ -170,6 +205,10 @@ private actor DelayedAuthenticationRepository: AuthenticationRepository {
         }
     }
 
+    func verifyEmailOTP(email: String, code: String) async throws -> AuthenticatedUser {
+        .init(userID: UUID(), email: email)
+    }
+
     func handleCallback(_ url: URL) async throws -> AuthenticatedUser {
         .init(userID: UUID(), email: "member@example.com")
     }
@@ -197,19 +236,23 @@ private final class StubAuthenticationRepository: AuthenticationRepository, @unc
     var accountAccess: AccountAccess
     let restoreError: Error?
     let requestError: Error?
+    let verificationError: Error?
     var requestedEmails: [String] = []
+    var verifiedOTPs: [String] = []
     var didSignOut = false
 
     init(
         restoredUser: AuthenticatedUser?,
         accountAccess: AccountAccess = .init(status: .pending, role: .member, personID: nil),
         restoreError: Error? = nil,
-        requestError: Error? = nil
+        requestError: Error? = nil,
+        verificationError: Error? = nil
     ) {
         self.restoredUser = restoredUser
         self.accountAccess = accountAccess
         self.restoreError = restoreError
         self.requestError = requestError
+        self.verificationError = verificationError
     }
 
     func restoreSession() async throws -> AuthenticatedUser? {
@@ -224,6 +267,14 @@ private final class StubAuthenticationRepository: AuthenticationRepository, @unc
         if let requestError {
             throw requestError
         }
+    }
+
+    func verifyEmailOTP(email: String, code: String) async throws -> AuthenticatedUser {
+        verifiedOTPs.append("\(email):\(code)")
+        if let verificationError {
+            throw verificationError
+        }
+        return .init(userID: UUID(), email: email)
     }
 
     func handleCallback(_ url: URL) async throws -> AuthenticatedUser {

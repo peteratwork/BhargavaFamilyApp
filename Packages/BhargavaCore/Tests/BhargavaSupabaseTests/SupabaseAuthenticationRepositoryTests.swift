@@ -34,6 +34,20 @@ final class SupabaseAuthenticationRepositoryTests: XCTestCase {
         XCTAssertEqual(request?.shouldCreateUser, false)
     }
 
+    func testOTPVerificationUsesEmailAndSixDigitToken() async throws {
+        let service = StubSupabaseAuthService()
+        let repository = SupabaseAuthenticationRepository(
+            service: service,
+            callbackURL: URL(string: "bhargavafamily://auth-callback")!
+        )
+
+        _ = try await repository.verifyEmailOTP(email: "invitee@example.com", code: "123456")
+
+        let verification = await service.lastOTPVerification
+        XCTAssertEqual(verification?.email, "invitee@example.com")
+        XCTAssertEqual(verification?.code, "123456")
+    }
+
     func testRestoreMapsRemoteUser() async throws {
         let userID = UUID()
         let service = StubSupabaseAuthService(
@@ -98,6 +112,7 @@ private actor StubSupabaseAuthService: SupabaseAuthService {
     private let restoredUser: RemoteAuthenticatedUser?
     private let accountAccess: RemoteAccountAccess
     private(set) var lastOTPRequest: OTPRequest?
+    private(set) var lastOTPVerification: EmailOTPVerification?
 
     init(
         restoredUser: RemoteAuthenticatedUser? = nil,
@@ -125,6 +140,11 @@ private actor StubSupabaseAuthService: SupabaseAuthService {
             redirectTo: redirectTo,
             shouldCreateUser: shouldCreateUser
         )
+    }
+
+    func verifyEmailOTP(email: String, code: String) async throws -> RemoteAuthenticatedUser {
+        lastOTPVerification = .init(email: email, code: code)
+        return .init(userID: UUID(), email: email)
     }
 
     func user(from callbackURL: URL) async throws -> RemoteAuthenticatedUser {
