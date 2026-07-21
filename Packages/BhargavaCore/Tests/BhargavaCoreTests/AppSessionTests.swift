@@ -366,7 +366,7 @@ private final class StubAuthenticationRepository: AuthenticationRepository, @unc
         if let accountError {
             throw accountError
         }
-        accountAccess
+        return accountAccess
     }
 
     func signOut() async throws {
