@@ -1,6 +1,6 @@
 begin;
 
-select plan(48);
+select plan(79);
 
 select has_table('public', 'people', 'people table exists');
 select has_table('public', 'accounts', 'accounts table exists');
@@ -34,12 +34,14 @@ insert into auth.users (id, email)
 values
   ('11111111-1111-1111-1111-111111111111', 'admin@example.com'),
   ('22222222-2222-2222-2222-222222222222', 'pending@example.com'),
-  ('33333333-3333-3333-3333-333333333333', 'member@example.com');
+  ('33333333-3333-3333-3333-333333333333', 'member@example.com'),
+  ('44444444-4444-4444-4444-444444444444', 'elder@example.com');
 
 insert into public.people (id, display_name, is_verified)
 values
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Approved Member', true),
-  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Unclaimed Person', true);
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Unclaimed Person', true),
+  ('12121212-1212-1212-1212-121212121212', 'Trusted Elder', true);
 
 update public.accounts
 set person_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
@@ -51,6 +53,12 @@ update public.accounts
 set person_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
     status = 'approved'
 where user_id = '33333333-3333-3333-3333-333333333333';
+
+update public.accounts
+set person_id = '12121212-1212-1212-1212-121212121212',
+    status = 'approved',
+    role = 'trusted_elder'
+where user_id = '44444444-4444-4444-4444-444444444444';
 
 insert into public.invitations (
   id, invited_email, target_person_id, invited_by, token_hash, expires_at
@@ -72,6 +80,60 @@ values (
   'cccccccc-cccc-cccc-cccc-cccccccccccc',
   '22222222-2222-2222-2222-222222222222',
   'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+);
+
+set local role anon;
+
+select throws_ok($$ select count(*) from public.people $$, '42501', null,
+  'anonymous clients cannot read people');
+select throws_ok($$ select count(*) from public.accounts $$, '42501', null,
+  'anonymous clients cannot read accounts');
+select throws_ok($$ select count(*) from public.invitations $$, '42501', null,
+  'anonymous clients cannot read invitations');
+select throws_ok($$ select count(*) from public.claims $$, '42501', null,
+  'anonymous clients cannot read claims');
+select throws_ok($$ select count(*) from public.app_policies $$, '42501', null,
+  'anonymous clients cannot read app policies');
+select throws_ok($$ select count(*) from public.audit_events $$, '42501', null,
+  'anonymous clients cannot read audit events');
+
+reset role;
+
+select ok(
+  not has_table_privilege('authenticated', 'public.people', 'INSERT')
+  and not has_table_privilege('authenticated', 'public.people', 'UPDATE')
+  and not has_table_privilege('authenticated', 'public.people', 'DELETE'),
+  'authenticated clients cannot mutate people directly'
+);
+select ok(
+  not has_table_privilege('authenticated', 'public.accounts', 'INSERT')
+  and not has_table_privilege('authenticated', 'public.accounts', 'UPDATE')
+  and not has_table_privilege('authenticated', 'public.accounts', 'DELETE'),
+  'authenticated clients cannot mutate accounts directly'
+);
+select ok(
+  not has_table_privilege('authenticated', 'public.invitations', 'INSERT')
+  and not has_table_privilege('authenticated', 'public.invitations', 'UPDATE')
+  and not has_table_privilege('authenticated', 'public.invitations', 'DELETE'),
+  'authenticated clients cannot mutate invitations directly'
+);
+select ok(
+  not has_table_privilege('authenticated', 'public.claims', 'INSERT')
+  and not has_table_privilege('authenticated', 'public.claims', 'UPDATE')
+  and not has_table_privilege('authenticated', 'public.claims', 'DELETE'),
+  'authenticated clients cannot mutate claims directly'
+);
+select ok(
+  not has_table_privilege('authenticated', 'public.app_policies', 'INSERT')
+  and not has_table_privilege('authenticated', 'public.app_policies', 'UPDATE')
+  and not has_table_privilege('authenticated', 'public.app_policies', 'DELETE'),
+  'authenticated clients cannot mutate app policies directly'
+);
+select ok(
+  not has_table_privilege('authenticated', 'public.audit_events', 'INSERT')
+  and not has_table_privilege('authenticated', 'public.audit_events', 'UPDATE')
+  and not has_table_privilege('authenticated', 'public.audit_events', 'DELETE'),
+  'authenticated clients cannot mutate audit events directly'
 );
 
 set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
@@ -102,6 +164,12 @@ select results_eq(
   'pending user reads their claim'
 );
 
+select results_eq(
+  $$ select count(*)::bigint from public.app_policies $$,
+  $$ values (0::bigint) $$,
+  'pending user cannot read app policies'
+);
+
 select throws_ok(
   $$ insert into public.audit_events(action, target_type, outcome)
      values ('forged', 'account', 'succeeded') $$,
@@ -109,6 +177,50 @@ select throws_ok(
   null,
   'authenticated client cannot forge audit events'
 );
+
+reset role;
+
+set local request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+set local request.jwt.claims = '{"sub":"44444444-4444-4444-4444-444444444444","email":"elder@example.com","role":"authenticated"}';
+set local role authenticated;
+
+select is(public.is_reviewer(), true, 'trusted elder is recognized as a reviewer');
+select results_eq($$ select count(*)::bigint from public.people $$,
+  $$ values (1::bigint) $$, 'trusted elder reads only their person');
+select results_eq($$ select count(*)::bigint from public.people where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' $$,
+  $$ values (0::bigint) $$, 'trusted elder cannot read another person');
+select results_eq($$ select count(*)::bigint from public.accounts $$,
+  $$ values (1::bigint) $$, 'trusted elder reads only their account');
+select results_eq($$ select count(*)::bigint from public.invitations $$,
+  $$ values (0::bigint) $$, 'trusted elder cannot read another invitation');
+select results_eq($$ select count(*)::bigint from public.claims $$,
+  $$ values (0::bigint) $$, 'trusted elder cannot read another claim');
+select results_eq($$ select count(*)::bigint from public.app_policies $$,
+  $$ values (0::bigint) $$, 'trusted elder cannot read server policy configuration');
+select throws_ok($$ select count(*) from public.audit_events $$, '42501', null,
+  'trusted elder cannot read audit history directly');
+
+reset role;
+
+set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+set local request.jwt.claims = '{"sub":"11111111-1111-1111-1111-111111111111","email":"admin@example.com","role":"authenticated"}';
+set local role authenticated;
+
+select is(public.is_reviewer(), true, 'admin is recognized as a reviewer');
+select results_eq($$ select count(*)::bigint from public.people $$,
+  $$ values (1::bigint) $$, 'admin reads only their person through the client');
+select results_eq($$ select count(*)::bigint from public.people where id = '12121212-1212-1212-1212-121212121212' $$,
+  $$ values (0::bigint) $$, 'admin cannot bypass relationship visibility');
+select results_eq($$ select count(*)::bigint from public.accounts $$,
+  $$ values (1::bigint) $$, 'admin reads only their account through the client');
+select results_eq($$ select count(*)::bigint from public.invitations $$,
+  $$ values (0::bigint) $$, 'admin cannot read another invitation through the client');
+select results_eq($$ select count(*)::bigint from public.claims $$,
+  $$ values (0::bigint) $$, 'admin cannot read another claim through the client');
+select results_eq($$ select count(*)::bigint from public.app_policies $$,
+  $$ values (0::bigint) $$, 'admin cannot read server policy configuration directly');
+select throws_ok($$ select count(*) from public.audit_events $$, '42501', null,
+  'admin cannot read audit history directly');
 
 reset role;
 
@@ -151,6 +263,21 @@ select results_eq(
        and target_id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee' $$,
   $$ values (1::bigint) $$,
   'invitation transaction appends an audit event'
+);
+
+select throws_ok(
+  $$ update public.audit_events set outcome = 'failed'
+     where action = 'invitation.created' $$,
+  'P0001',
+  'audit_events_are_immutable',
+  'audit events cannot be updated even by a privileged connection'
+);
+
+select throws_ok(
+  $$ delete from public.audit_events where action = 'invitation.created' $$,
+  'P0001',
+  'audit_events_are_immutable',
+  'audit events cannot be deleted even by a privileged connection'
 );
 
 select lives_ok(
