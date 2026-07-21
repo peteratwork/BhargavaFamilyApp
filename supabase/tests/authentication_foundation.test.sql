@@ -1,6 +1,6 @@
 begin;
 
-select plan(43);
+select plan(48);
 
 select has_table('public', 'people', 'people table exists');
 select has_table('public', 'accounts', 'accounts table exists');
@@ -274,6 +274,35 @@ select throws_ok(
   'P0001',
   'target_unavailable',
   'suspended account person cannot be invited or claimed again'
+);
+
+select lives_ok(
+  $$ update public.accounts
+     set status = 'closed'
+     where user_id = '22222222-2222-2222-2222-222222222222' $$,
+  'an unclaimed pending account can be closed without assigning a person'
+);
+
+select results_eq(
+  $$ select person_id from public.accounts
+     where user_id = '22222222-2222-2222-2222-222222222222' $$,
+  $$ values (null::uuid) $$,
+  'closed unclaimed account remains unlinked'
+);
+
+select ok(
+  not has_table_privilege('service_role', 'public.audit_events', 'INSERT'),
+  'service role cannot insert audit rows outside protected functions'
+);
+
+select ok(
+  not has_table_privilege('service_role', 'public.audit_events', 'UPDATE'),
+  'service role cannot rewrite audit rows'
+);
+
+select ok(
+  not has_table_privilege('service_role', 'public.audit_events', 'DELETE'),
+  'service role cannot delete audit rows'
 );
 
 select * from finish();
