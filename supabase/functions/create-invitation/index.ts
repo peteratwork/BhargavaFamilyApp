@@ -40,7 +40,7 @@ class SupabaseInvitationRepository implements InvitationRepository {
     private readonly actorUserID: string,
   ) {}
 
-  async targetIsAvailable(personId: string): Promise<boolean> {
+  async invitationIsAvailable(personId: string, normalizedEmail: string): Promise<boolean> {
     const { data: person, error: personError } = await this.client
       .from('people')
       .select('id')
@@ -66,14 +66,28 @@ class SupabaseInvitationRepository implements InvitationRepository {
       .gt('expires_at', new Date().toISOString())
       .maybeSingle()
     if (invitationError) throw invitationError
-    return invitation === null
+    if (invitation) return false
+
+    const { data: emailInvitation, error: emailInvitationError } = await this.client
+      .from('invitations')
+      .select('id')
+      .eq('invited_email', normalizedEmail)
+      .eq('status', 'pending')
+      .gt('expires_at', new Date().toISOString())
+      .maybeSingle()
+    if (emailInvitationError) throw emailInvitationError
+    return emailInvitation === null
   }
 
   async createAndAudit(input: {
     targetPersonId: string
     normalizedEmail: string
     actorUserId: string
-  }): Promise<{ invitationId: string; expiresAt: string }> {
+  }): Promise<{
+    invitationId: string
+    expiresAt: string
+    usesExistingAuthUser: boolean
+  } | null> {
     const tokenHash = await sha256(`${crypto.randomUUID()}:${input.normalizedEmail}`)
     const { data, error } = await this.client.rpc('create_invitation_record', {
       p_target_person_id: input.targetPersonId,
@@ -81,13 +95,39 @@ class SupabaseInvitationRepository implements InvitationRepository {
       p_actor_user_id: input.actorUserId,
       p_token_hash: tokenHash,
     })
-    if (error) throw error
+    if (error) {
+      const unavailable = error.code === '23505' ||
+        (error.code === 'P0001' && /(?:target|email)_unavailable/.test(error.message))
+      if (unavailable) return null
+      throw error
+    }
     const row = Array.isArray(data) ? data[0] : data
     if (!row?.invitation_id || !row?.expires_at) throw new Error('invitation_transaction_failed')
-    return { invitationId: row.invitation_id, expiresAt: row.expires_at }
+    return {
+      invitationId: row.invitation_id,
+      expiresAt: row.expires_at,
+      usesExistingAuthUser: row.uses_existing_auth_user === true,
+    }
   }
 
-  async sendAuthInvitation(email: string, invitationId: string): Promise<void> {
+  async sendAuthInvitation(
+    email: string,
+    invitationId: string,
+    usesExistingAuthUser: boolean,
+  ): Promise<void> {
+    if (usesExistingAuthUser) {
+      const { error } = await this.client.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: false,
+          emailRedirectTo: this.redirectURL,
+          data: { invitation_id: invitationId },
+        },
+      })
+      if (error) throw error
+      return
+    }
+
     const { error } = await this.client.auth.admin.inviteUserByEmail(email, {
       redirectTo: this.redirectURL,
       data: { invitation_id: invitationId },

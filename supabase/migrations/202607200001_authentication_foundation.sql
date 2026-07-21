@@ -315,7 +315,11 @@ create or replace function public.create_invitation_record(
   p_actor_user_id uuid,
   p_token_hash text
 )
-returns table(invitation_id uuid, expires_at timestamptz)
+returns table(
+  invitation_id uuid,
+  expires_at timestamptz,
+  uses_existing_auth_user boolean
+)
 language plpgsql
 security definer
 set search_path = ''
@@ -324,10 +328,17 @@ declare
   v_invitation_id uuid;
   v_expires_at timestamptz;
   v_lifetime_hours integer;
+  v_normalized_email extensions.citext;
+  v_existing_user_id uuid;
 begin
+  v_normalized_email := lower(btrim(p_normalized_email));
+
   update public.invitations as i
   set status = 'expired'
-  where i.target_person_id = p_target_person_id
+  where (
+      i.target_person_id = p_target_person_id
+      or i.invited_email = v_normalized_email
+    )
     and i.status = 'pending'
     and i.expires_at <= now();
 
@@ -353,8 +364,28 @@ begin
     from public.invitations i
     where i.target_person_id = p_target_person_id
       and i.status = 'pending'
+  ) or exists (
+    select 1
+    from public.invitations i
+    where i.invited_email = v_normalized_email
+      and i.status = 'pending'
   ) then
     raise exception 'target_unavailable' using errcode = 'P0001';
+  end if;
+
+  select a.user_id
+  into v_existing_user_id
+  from auth.users u
+  join public.accounts a on a.user_id = u.id
+  where lower(u.email) = v_normalized_email::text
+    and a.status = 'closed'
+    and a.person_id is null
+  limit 1;
+
+  if v_existing_user_id is null and exists (
+    select 1 from auth.users u where lower(u.email) = v_normalized_email::text
+  ) then
+    raise exception 'email_unavailable' using errcode = 'P0001';
   end if;
 
   select p.invitation_lifetime_hours
@@ -365,20 +396,28 @@ begin
   v_invitation_id := gen_random_uuid();
   v_expires_at := now() + make_interval(hours => v_lifetime_hours);
 
+  if v_existing_user_id is not null then
+    update public.accounts as a
+    set status = 'pending', updated_at = now()
+    where a.user_id = v_existing_user_id;
+  end if;
+
   insert into public.invitations (
     id,
     invited_email,
     target_person_id,
     invited_by,
     token_hash,
-    expires_at
+    expires_at,
+    accepted_by
   ) values (
     v_invitation_id,
     lower(btrim(p_normalized_email)),
     p_target_person_id,
     p_actor_user_id,
     p_token_hash,
-    v_expires_at
+    v_expires_at,
+    v_existing_user_id
   );
 
   insert into public.audit_events (
@@ -386,16 +425,19 @@ begin
     action,
     target_type,
     target_id,
-    outcome
+    outcome,
+    metadata
   ) values (
     p_actor_user_id,
     'invitation.created',
     'person',
     p_target_person_id,
-    'succeeded'
+    'succeeded',
+    jsonb_build_object('reactivated_existing_user', v_existing_user_id is not null)
   );
 
-  return query select v_invitation_id, v_expires_at;
+  return query
+  select v_invitation_id, v_expires_at, v_existing_user_id is not null;
 end;
 $$;
 

@@ -14,16 +14,21 @@ export type CreateInvitationInput = {
 export type CreatedInvitation = {
   invitationId: string
   expiresAt: string
+  usesExistingAuthUser: boolean
 }
 
 export interface InvitationRepository {
-  targetIsAvailable(personId: string): Promise<boolean>
+  invitationIsAvailable(personId: string, normalizedEmail: string): Promise<boolean>
   createAndAudit(input: {
     targetPersonId: string
     normalizedEmail: string
     actorUserId: string
-  }): Promise<CreatedInvitation>
-  sendAuthInvitation(email: string, invitationId: string): Promise<void>
+  }): Promise<CreatedInvitation | null>
+  sendAuthInvitation(
+    email: string,
+    invitationId: string,
+    usesExistingAuthUser: boolean,
+  ): Promise<void>
   revokeAfterDeliveryFailure(invitationId: string): Promise<void>
 }
 
@@ -64,7 +69,7 @@ export async function createInvitation(
     return { ok: false, status: 403, code: 'not_authorized' }
   }
 
-  if (!await dependencies.repository.targetIsAvailable(input.targetPersonId)) {
+  if (!await dependencies.repository.invitationIsAvailable(input.targetPersonId, email)) {
     return { ok: false, status: 409, code: 'target_unavailable' }
   }
 
@@ -73,9 +78,14 @@ export async function createInvitation(
     normalizedEmail: email,
     actorUserId: dependencies.actor.userId,
   })
+  if (!created) return { ok: false, status: 409, code: 'target_unavailable' }
 
   try {
-    await dependencies.repository.sendAuthInvitation(email, created.invitationId)
+    await dependencies.repository.sendAuthInvitation(
+      email,
+      created.invitationId,
+      created.usesExistingAuthUser,
+    )
   } catch {
     await dependencies.repository.revokeAfterDeliveryFailure(created.invitationId)
     return { ok: false, status: 409, code: 'delivery_failed' }
