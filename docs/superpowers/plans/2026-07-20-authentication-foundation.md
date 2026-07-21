@@ -8,6 +8,8 @@
 
 **Tech Stack:** Swift 5 / SwiftUI on iOS 17+, Swift Package Manager, supabase-swift 2.x, PostgreSQL 15+, Supabase CLI, pgTAP, Deno/TypeScript Edge Functions, Codemagic.
 
+**Execution Environment Note:** The Windows Cloud PC does not expose nested virtualization, so Docker Desktop cannot run the local Supabase stack. Run CLI initialization and pure Deno/Swift checks locally where supported. Run every Docker-backed `supabase start`, reset, lint, and pgTAP red-green verification in `.github/workflows/backend-tests.yml` on GitHub-hosted Linux. A test is not considered verified until CI demonstrates the expected failure before implementation and a passing run afterward.
+
 ## Global Constraints
 
 - The private beta supports no more than 100 members.
@@ -29,6 +31,7 @@ This plan is Phase 1 of the approved production program. Later plans, in order, 
 ## File Structure
 
 - `package.json`: project-scoped Supabase CLI command and pinned tool version.
+- `.github/workflows/backend-tests.yml`: Docker-backed Supabase verification for Cloud-PC development.
 - `supabase/config.toml`: reproducible local Auth/Postgres configuration.
 - `supabase/migrations/202607200001_authentication_foundation.sql`: identity schema, constraints, helper functions, and RLS.
 - `supabase/seed.sql`: synthetic people, admin, invitation, and claim states only.
@@ -54,13 +57,14 @@ This plan is Phase 1 of the approved production program. Later plans, in order, 
 
 **Files:**
 - Create: `package.json`
+- Create: `.github/workflows/backend-tests.yml`
 - Create: `supabase/config.toml`
 - Create: `supabase/seed.sql`
 - Modify: `.gitignore` if generated Supabase temp paths are not already ignored
 
 **Interfaces:**
-- Consumes: Node.js 20+ and a Docker-compatible runtime.
-- Produces: `npm run supabase -- <command>` and a local stack resettable from committed files.
+- Consumes: Node.js 22 locally and a Docker-capable GitHub-hosted Linux runner.
+- Produces: `npx supabase <command>` and a CI stack resettable from committed files.
 
 - [ ] **Step 1: Initialize the project-scoped CLI**
 
@@ -85,7 +89,7 @@ Create `package.json`:
 
 Run: `npm install`
 
-Expected: `package-lock.json` is created and `npm run supabase -- --version` exits 0.
+Expected: `package-lock.json` is created and `npx supabase --version` exits 0.
 
 - [ ] **Step 2: Initialize Supabase and restrict generated state**
 
@@ -127,18 +131,20 @@ Create `supabase/seed.sql`:
 -- Real family information must never be committed to this file.
 ```
 
-- [ ] **Step 4: Verify a clean local reset**
+- [ ] **Step 4: Verify a clean CI reset**
 
-Run: `npm run db:start`
+Push the scaffold branch so `.github/workflows/backend-tests.yml` runs:
 
-Run: `npm run db:reset`
+```bash
+git push -u origin codex/authentication-foundation
+```
 
-Expected: both commands exit 0 and Supabase Studio is available only on localhost.
+Expected: the GitHub-hosted `Backend Tests` workflow starts Supabase, resets the database, lints it, and exits 0. No Supabase service is exposed from the Cloud PC.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add package.json package-lock.json .gitignore supabase/config.toml supabase/seed.sql
+git add package.json package-lock.json .gitignore supabase/config.toml supabase/seed.sql .github/workflows/backend-tests.yml docs/superpowers/plans/2026-07-20-authentication-foundation.md
 git commit -m "build: initialize Supabase development stack"
 ```
 

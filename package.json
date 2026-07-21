@@ -1,0 +1,14 @@
+{
+  "name": "bhargava-family-app-infrastructure",
+  "private": true,
+  "scripts": {
+    "supabase": "supabase",
+    "db:start": "supabase start",
+    "db:reset": "supabase db reset",
+    "db:test": "supabase test db",
+    "functions:test": "deno test supabase/functions/tests --allow-env"
+  },
+  "devDependencies": {
+    "supabase": "^2.40.0"
+  }
+}

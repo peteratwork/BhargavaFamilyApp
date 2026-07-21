@@ -1,0 +1,52 @@
+name: Backend Tests
+
+on:
+  push:
+    branches:
+      - main
+      - "codex/**"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  supabase:
+    name: Supabase database and functions
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install backend tools
+        run: npm ci
+
+      - name: Start local Supabase
+        run: npx supabase start
+
+      - name: Rebuild database from migrations
+        run: npx supabase db reset
+
+      - name: Lint database
+        run: npx supabase db lint --local --level warning
+
+      - name: Test database policies and functions
+        run: npx supabase test db
+
+      - name: Test Edge Functions
+        if: ${{ hashFiles('supabase/functions/tests/**/*.ts') != '' }}
+        run: deno test supabase/functions/tests --allow-env
+
+      - name: Stop local Supabase
+        if: always()
+        run: npx supabase stop --no-backup
