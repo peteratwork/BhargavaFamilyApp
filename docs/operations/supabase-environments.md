@@ -30,7 +30,7 @@ In Codemagic, open the BhargavaFamilyApp application, then **Environment variabl
 | `SUPABASE_URL` | Production project HTTPS URL | Restricted group |
 | `SUPABASE_PUBLISHABLE_KEY` | Publishable key (or legacy anonymous client key) | Restricted group |
 
-Do not add an `sb_secret_...` key or service-role JWT. The release workflow and the app both reject obvious secret/unexpanded values.
+Do not add an `sb_secret_...` key or legacy service-role JWT. The release workflow and the app both reject these server credentials and obvious unexpanded values.
 
 Limit the group to this Codemagic application and to release operators. The existing App Store Connect integration and iOS signing assets remain separate.
 
@@ -47,6 +47,8 @@ Run `ios-release-archive` only from a reviewed commit. It:
 
 If validation, tests, signing, or archive fails, no TestFlight upload occurs. Confirm the build in App Store Connect and assign beta testers deliberately after smoke testing.
 
+Both Codemagic workflows wait for the GitHub **Backend Tests** workflow to pass at the exact `CM_COMMIT` SHA before starting an iOS test or build. The repository is public, so this gate needs no additional GitHub credential; if the repository becomes private, add a read-only `GITHUB_TOKEN` to Codemagic.
+
 ## Operational checks
 
 - Use synthetic accounts for the first signed smoke test.
@@ -54,3 +56,19 @@ If validation, tests, signing, or archive fails, no TestFlight upload occurs. Co
 - Record sanitized p50/p95 request latency by broad region; never log email, names, tokens, claim notes, or relationships.
 - Review backup status before each production migration.
 - Keep a rollback-compatible prior TestFlight build available until the new build passes authentication and access-control smoke tests.
+
+## First administrator bootstrap
+
+The invitation function requires an existing approved administrator and an existing verified person. Bootstrap the first administrator as a one-time, peer-reviewed operator action:
+
+1. Create or import the administrator's verified `people` record.
+2. Use **Authentication → Users → Send invitation** in the Supabase dashboard for that administrator's email.
+3. Have the administrator authenticate once so the database trigger creates their pending `accounts` row.
+4. In one reviewed SQL transaction, link that account to the verified person, change status to `approved`, set role to `admin`, and append an `administrator.bootstrap` audit event.
+5. Verify that the administrator can create a synthetic invitation through the protected function before importing or inviting real family members.
+
+Record the operator, reviewer, commit, and timestamp outside the database. Do not create additional administrators through direct SQL; later role management must use a protected audited server operation.
+
+## Current Phase 1 boundary
+
+Authentication, invitation isolation, and pending/blocked routing are implemented. Approved accounts intentionally receive a safe placeholder rather than `SampleFamily`; verified family-graph reads, claim submission/review, role management, and invitation/Auth-user revocation are the next production phase. Until those operations exist, do not onboard real family data or treat the build as a complete member experience.

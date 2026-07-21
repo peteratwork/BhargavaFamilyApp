@@ -6,9 +6,9 @@ struct PendingClaimView: View {
 
     var body: some View {
         ContentUnavailableView {
-            Label("Membership review pending", systemImage: "person.badge.clock")
+            Label("Membership setup pending", systemImage: "person.badge.clock")
         } description: {
-            Text("A trusted elder or administrator must approve your claim before family information becomes visible.")
+            Text("A trusted elder or administrator must finish your profile claim before family information becomes visible.")
         } actions: {
             VStack(spacing: 12) {
                 Button("Check review status") {
