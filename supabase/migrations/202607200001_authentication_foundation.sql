@@ -107,3 +107,89 @@ create table public.audit_events (
   metadata jsonb not null default '{}'::jsonb,
   occurred_at timestamptz not null default now()
 );
+
+create or replace function public.current_account()
+returns public.accounts
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select a
+  from public.accounts a
+  where a.user_id = auth.uid();
+$$;
+
+create or replace function public.is_reviewer()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(
+    (
+      select a.status = 'approved' and a.role in ('trusted_elder', 'admin')
+      from public.accounts a
+      where a.user_id = auth.uid()
+    ),
+    false
+  );
+$$;
+
+alter table public.people enable row level security;
+alter table public.accounts enable row level security;
+alter table public.invitations enable row level security;
+alter table public.claims enable row level security;
+alter table public.app_policies enable row level security;
+alter table public.audit_events enable row level security;
+
+grant select on public.people to authenticated;
+grant select on public.accounts to authenticated;
+grant select on public.invitations to authenticated;
+grant select on public.claims to authenticated;
+grant select on public.app_policies to authenticated;
+
+revoke all on public.audit_events from anon, authenticated;
+revoke insert, update, delete on public.people from anon, authenticated;
+revoke insert, update, delete on public.accounts from anon, authenticated;
+revoke insert, update, delete on public.invitations from anon, authenticated;
+revoke insert, update, delete on public.claims from anon, authenticated;
+revoke insert, update, delete on public.app_policies from anon, authenticated;
+
+revoke all on function public.current_account() from public;
+revoke all on function public.is_reviewer() from public;
+grant execute on function public.current_account() to authenticated;
+grant execute on function public.is_reviewer() to authenticated;
+
+create policy "approved members read own person only"
+on public.people
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.accounts a
+    where a.user_id = auth.uid()
+      and a.status = 'approved'
+      and a.person_id = people.id
+  )
+);
+
+create policy "users read own account"
+on public.accounts
+for select
+to authenticated
+using (user_id = auth.uid());
+
+create policy "users read own invitation"
+on public.invitations
+for select
+to authenticated
+using (lower(invited_email::text) = lower(coalesce(auth.jwt() ->> 'email', '')));
+
+create policy "users read own claims"
+on public.claims
+for select
+to authenticated
+using (claimant_user_id = auth.uid());
