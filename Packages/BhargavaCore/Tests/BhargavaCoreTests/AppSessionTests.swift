@@ -141,6 +141,41 @@ final class AppSessionTests: XCTestCase {
         XCTAssertEqual(session.state, .awaitingEmail(email: "member@example.com"))
     }
 
+    func testSuccessfulOTPWithAccountFailureOffersAccountRefreshRetry() async {
+        let repository = StubAuthenticationRepository(
+            restoredUser: nil,
+            accountError: StubError.requestFailed
+        )
+        let session = AppSession(repository: repository, initialState: .awaitingEmail(email: "member@example.com"))
+
+        await session.verifyOTP(email: "member@example.com", code: "123456")
+
+        XCTAssertEqual(repository.verifiedOTPs, ["member@example.com:123456"])
+        XCTAssertFalse(session.otpVerificationFailed)
+        XCTAssertEqual(session.state, .accountRefreshFailed)
+    }
+
+    func testSignOutWaitsForInFlightOTPVerificationThenClearsItsSession() async {
+        let repository = DelayedVerificationRepository()
+        let session = AppSession(repository: repository, initialState: .awaitingEmail(email: "member@example.com"))
+
+        let verification = Task {
+            await session.verifyOTP(email: "member@example.com", code: "123456")
+        }
+        await repository.waitForVerification()
+        let signOut = Task { await session.signOut() }
+        await Task.yield()
+        await repository.completeVerification()
+        await verification.value
+        await signOut.value
+
+        let hasSession = await repository.hasSession
+        let events = await repository.events
+        XCTAssertFalse(hasSession)
+        XCTAssertEqual(events, ["verify-start", "verify-finish", "sign-out"])
+        XCTAssertEqual(session.state, .signedOut)
+    }
+
     func testInvalidEmailDoesNotReachRepository() async {
         let repository = StubAuthenticationRepository(restoredUser: nil)
         let session = AppSession(repository: repository, initialState: .signedOut)
@@ -231,12 +266,56 @@ private actor DelayedAuthenticationRepository: AuthenticationRepository {
     }
 }
 
+private actor DelayedVerificationRepository: AuthenticationRepository {
+    private var verificationContinuation: CheckedContinuation<Void, Never>?
+    private(set) var hasSession = false
+    private(set) var events: [String] = []
+
+    func restoreSession() async throws -> AuthenticatedUser? { nil }
+    func requestEmailOTP(_ email: String) async throws {}
+
+    func verifyEmailOTP(email: String, code: String) async throws -> AuthenticatedUser {
+        events.append("verify-start")
+        await withCheckedContinuation { continuation in
+            verificationContinuation = continuation
+        }
+        hasSession = true
+        events.append("verify-finish")
+        return .init(userID: UUID(), email: email)
+    }
+
+    func handleCallback(_ url: URL) async throws -> AuthenticatedUser {
+        .init(userID: UUID(), email: "member@example.com")
+    }
+
+    func fetchAccountAccess() async throws -> AccountAccess {
+        .init(status: .pending, role: .member, personID: nil)
+    }
+
+    func signOut() async throws {
+        hasSession = false
+        events.append("sign-out")
+    }
+
+    func waitForVerification() async {
+        while verificationContinuation == nil {
+            await Task.yield()
+        }
+    }
+
+    func completeVerification() {
+        verificationContinuation?.resume()
+        verificationContinuation = nil
+    }
+}
+
 private final class StubAuthenticationRepository: AuthenticationRepository, @unchecked Sendable {
     let restoredUser: AuthenticatedUser?
     var accountAccess: AccountAccess
     let restoreError: Error?
     let requestError: Error?
     let verificationError: Error?
+    let accountError: Error?
     var requestedEmails: [String] = []
     var verifiedOTPs: [String] = []
     var didSignOut = false
@@ -246,13 +325,15 @@ private final class StubAuthenticationRepository: AuthenticationRepository, @unc
         accountAccess: AccountAccess = .init(status: .pending, role: .member, personID: nil),
         restoreError: Error? = nil,
         requestError: Error? = nil,
-        verificationError: Error? = nil
+        verificationError: Error? = nil,
+        accountError: Error? = nil
     ) {
         self.restoredUser = restoredUser
         self.accountAccess = accountAccess
         self.restoreError = restoreError
         self.requestError = requestError
         self.verificationError = verificationError
+        self.accountError = accountError
     }
 
     func restoreSession() async throws -> AuthenticatedUser? {
@@ -282,6 +363,9 @@ private final class StubAuthenticationRepository: AuthenticationRepository, @unc
     }
 
     func fetchAccountAccess() async throws -> AccountAccess {
+        if let accountError {
+            throw accountError
+        }
         accountAccess
     }
 
