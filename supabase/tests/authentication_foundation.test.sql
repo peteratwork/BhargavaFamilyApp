@@ -1,6 +1,6 @@
 begin;
 
-select plan(36);
+select plan(37);
 
 select has_table('public', 'people', 'people table exists');
 select has_table('public', 'accounts', 'accounts table exists');
