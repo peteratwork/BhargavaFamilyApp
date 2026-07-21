@@ -2,6 +2,16 @@ import BhargavaCore
 import Foundation
 import Supabase
 
+enum SupabaseClientConfiguration {
+    static let authenticationFlowType: AuthFlowType = .implicit
+
+    static var options: SupabaseClientOptions {
+        SupabaseClientOptions(
+            auth: .init(flowType: authenticationFlowType)
+        )
+    }
+}
+
 struct RemoteAuthenticatedUser: Equatable, Sendable {
     let userID: UUID
     let email: String
@@ -164,7 +174,8 @@ private final class LiveSupabaseAuthService: SupabaseAuthService, @unchecked Sen
     init(supabaseURL: URL, publishableKey: String) {
         client = SupabaseClient(
             supabaseURL: supabaseURL,
-            supabaseKey: publishableKey
+            supabaseKey: publishableKey,
+            options: SupabaseClientConfiguration.options
         )
     }
 
