@@ -55,6 +55,15 @@ workflows:
               raise SystemExit("SUPABASE_PUBLISHABLE_KEY is missing or unresolved")
           if key.lower().startswith("sb_secret_"):
               raise SystemExit("A Supabase secret key must never be embedded in the iOS app")
+          try:
+              import base64, json
+              parts = key.split(".")
+              payload = parts[1] + "=" * (-len(parts[1]) % 4)
+              claims = json.loads(base64.urlsafe_b64decode(payload)) if len(parts) == 3 else {}
+          except Exception:
+              claims = {}
+          if claims.get("role") == "service_role":
+              raise SystemExit("A legacy service-role JWT must never be embedded in the iOS app")
           PY
       - name: Test app core
         script: swift test --package-path Packages/BhargavaCore

@@ -62,6 +62,7 @@ class SupabaseInvitationRepository implements InvitationRepository {
       .select('id')
       .eq('target_person_id', personId)
       .eq('status', 'pending')
+      .gt('expires_at', new Date().toISOString())
       .maybeSingle()
     if (invitationError) throw invitationError
     return invitation === null

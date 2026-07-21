@@ -80,7 +80,9 @@ public final class AppSession {
             state = .awaitingEmail(email: email)
         } catch {
             guard isCurrent(operation) else { return }
-            state = .failed(.requestFailed)
+            // Keep the public result identical for invited and unknown addresses.
+            // This prevents account or invitation enumeration from the UI.
+            state = .awaitingEmail(email: email)
         }
     }
 

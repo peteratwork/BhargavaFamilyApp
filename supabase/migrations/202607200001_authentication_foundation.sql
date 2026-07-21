@@ -29,7 +29,7 @@ create table public.accounts (
   status public.account_status not null default 'pending',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  check ((status = 'approved') = (person_id is not null))
+  check ((status = 'pending') = (person_id is null))
 );
 
 create or replace function public.create_pending_account()
@@ -210,6 +210,12 @@ declare
   v_expires_at timestamptz;
   v_lifetime_hours integer;
 begin
+  update public.invitations
+  set status = 'expired'
+  where target_person_id = p_target_person_id
+    and status = 'pending'
+    and expires_at <= now();
+
   if not exists (
     select 1
     from public.accounts a

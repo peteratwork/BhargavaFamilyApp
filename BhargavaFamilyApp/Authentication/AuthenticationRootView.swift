@@ -3,6 +3,7 @@ import SwiftUI
 
 struct AuthenticationRootView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @State private var isRevalidatingApprovedAccess = false
     let session: AppSession
 
     var body: some View {
@@ -21,7 +22,7 @@ struct AuthenticationRootView: View {
             case .approved:
                 ApprovedFamilyRootView(session: session)
                     .overlay {
-                        if scenePhase != .active {
+                        if scenePhase != .active || isRevalidatingApprovedAccess {
                             SensitiveContentCover()
                         }
                     }
@@ -33,6 +34,16 @@ struct AuthenticationRootView: View {
         }
         .onOpenURL { url in
             Task { await session.handleCallback(url) }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            guard case .approved = session.state else { return }
+
+            isRevalidatingApprovedAccess = true
+            Task {
+                await session.refreshAccount()
+                isRevalidatingApprovedAccess = false
+            }
         }
     }
 }
