@@ -47,7 +47,7 @@ jobs:
 
       - name: Test Edge Functions
         if: ${{ hashFiles('supabase/functions/tests/**/*.ts') != '' }}
-        run: deno test supabase/functions/tests --allow-env
+        run: npm run functions:test
 
       - name: Stop local Supabase
         if: always()

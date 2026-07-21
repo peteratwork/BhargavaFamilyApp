@@ -9,6 +9,7 @@
     "functions:test": "deno test supabase/functions/tests --allow-env"
   },
   "devDependencies": {
+    "deno": "^2.9.2",
     "supabase": "^2.40.0"
   }
 }
