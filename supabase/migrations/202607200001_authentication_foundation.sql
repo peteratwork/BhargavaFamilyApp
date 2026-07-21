@@ -71,6 +71,56 @@ create unique index one_pending_invitation_per_person
 on public.invitations(target_person_id)
 where status = 'pending';
 
+create unique index one_pending_invitation_per_email
+on public.invitations(invited_email)
+where status = 'pending';
+
+create or replace function public.create_pending_account()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into public.accounts(user_id, status, role)
+  values (new.id, 'pending', 'member')
+  on conflict (user_id) do nothing;
+
+  update public.invitations as i
+  set accepted_by = new.id
+  where new.email is not null
+    and i.invited_email = new.email
+    and i.status = 'pending'
+    and i.expires_at > now()
+    and i.accepted_by is null;
+
+  return new;
+end;
+$$;
+
+create or replace function public.close_account_after_invitation_ends()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if old.status = 'pending'
+     and new.status in ('expired', 'revoked')
+     and new.accepted_by is not null then
+    update public.accounts as a
+    set status = 'closed', updated_at = now()
+    where a.user_id = new.accepted_by
+      and a.status = 'pending';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger close_account_after_invitation_ends
+after update of status on public.invitations
+for each row execute function public.close_account_after_invitation_ends();
+
 create table public.claims (
   id uuid primary key default gen_random_uuid(),
   invitation_id uuid not null unique references public.invitations(id) on delete restrict,
@@ -91,7 +141,7 @@ create table public.app_policies (
   unlimited_depth boolean not null default false,
   contact_visibility text not null default 'permitted_relatives'
     check (contact_visibility in ('permitted_relatives', 'per_field_consent', 'approved_connection')),
-  invitation_lifetime_hours integer not null default 72
+  invitation_lifetime_hours integer not null default 1
     check (invitation_lifetime_hours between 1 and 720),
   updated_at timestamptz not null default now(),
   check (unlimited_depth or cousin_depth_limit is not null)
@@ -155,6 +205,48 @@ as $$
   );
 $$;
 
+create or replace function public.refresh_own_account_state()
+returns table(status text, role text, person_id uuid)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.uid() is null then
+    return;
+  end if;
+
+  update public.invitations as i
+  set status = 'expired'
+  where i.accepted_by = auth.uid()
+    and i.status = 'pending'
+    and i.expires_at <= now();
+
+  update public.accounts as a
+  set status = 'closed', updated_at = now()
+  where a.user_id = auth.uid()
+    and a.status = 'pending'
+    and not exists (
+      select 1
+      from public.invitations i
+      where i.accepted_by = a.user_id
+        and i.status = 'pending'
+        and i.expires_at > now()
+    )
+    and not exists (
+      select 1
+      from public.claims c
+      where c.claimant_user_id = a.user_id
+        and c.status = 'pending'
+    );
+
+  return query
+  select a.status::text, a.role::text, a.person_id
+  from public.accounts a
+  where a.user_id = auth.uid();
+end;
+$$;
+
 alter table public.people enable row level security;
 alter table public.accounts enable row level security;
 alter table public.invitations enable row level security;
@@ -179,8 +271,11 @@ revoke insert, update, delete on public.app_policies from anon, authenticated;
 revoke all on function public.current_account() from public;
 revoke all on function public.is_reviewer() from public;
 revoke all on function public.prevent_audit_event_mutation() from public;
+revoke all on function public.close_account_after_invitation_ends() from public;
+revoke all on function public.refresh_own_account_state() from public, anon;
 grant execute on function public.current_account() to authenticated;
 grant execute on function public.is_reviewer() to authenticated;
+grant execute on function public.refresh_own_account_state() to authenticated;
 
 create policy "approved members read own person only"
 on public.people

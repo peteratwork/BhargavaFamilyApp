@@ -13,7 +13,7 @@ enum SupabaseClientConfiguration {
 }
 
 enum SupabaseDatabaseSchema {
-    static let accountUserIDColumn = "user_id"
+    static let accountAccessRPC = "refresh_own_account_state"
 }
 
 struct RemoteAuthenticatedUser: Equatable, Sendable {
@@ -208,12 +208,8 @@ private final class LiveSupabaseAuthService: SupabaseAuthService, @unchecked Sen
     }
 
     func fetchAccountAccess() async throws -> RemoteAccountAccess {
-        let userID = try await client.auth.session.user.id
         let response: PostgrestResponse<[AccountRow]> = try await client
-            .from("accounts")
-            .select("status,role,person_id")
-            .eq(SupabaseDatabaseSchema.accountUserIDColumn, value: userID.uuidString)
-            .limit(1)
+            .rpc(SupabaseDatabaseSchema.accountAccessRPC)
             .execute()
 
         guard let row = response.value.first else {
