@@ -37,6 +37,7 @@ public struct AccountAccess: Equatable, Codable, Sendable {
 
 public enum SessionError: String, Equatable, Sendable {
     case authenticationFailed
+    case invalidEmail
     case requestFailed
     case serviceUnavailable
 }

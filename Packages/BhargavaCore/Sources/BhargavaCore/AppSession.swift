@@ -50,9 +50,11 @@ public final class AppSession {
     }
 
     public func requestOTP(email rawEmail: String) async {
-        let email = rawEmail
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased(with: Locale(identifier: "en_US_POSIX"))
+        let email = EmailAddress.normalized(rawEmail)
+        guard EmailAddress.isValid(email) else {
+            _ = beginOperation(state: .failed(.invalidEmail))
+            return
+        }
         let operation = beginOperation(state: .requestingOTP(email: email))
 
         do {
