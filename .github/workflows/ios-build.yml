@@ -2,7 +2,9 @@ name: iOS Build
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - "codex/**"
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -23,6 +25,9 @@ jobs:
         run: |
           xcodebuild -version
           xcodebuild -list -project BhargavaFamilyApp.xcodeproj
+
+      - name: Test app core
+        run: swift test --package-path Packages/BhargavaCore
 
       - name: Build
         run: |
