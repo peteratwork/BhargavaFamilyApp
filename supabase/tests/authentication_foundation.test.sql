@@ -1,6 +1,6 @@
 begin;
 
-select plan(29);
+select plan(36);
 
 select has_table('public', 'people', 'people table exists');
 select has_table('public', 'accounts', 'accounts table exists');
@@ -111,6 +111,64 @@ select throws_ok(
 );
 
 reset role;
+
+select has_function('public', 'create_invitation_record', 'transactional invitation function exists');
+select has_function('public', 'revoke_invitation_after_delivery_failure', 'delivery failure compensation exists');
+
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.create_invitation_record(uuid,text,uuid,text)',
+    'execute'
+  ),
+  'authenticated clients cannot execute invitation transaction directly'
+);
+
+insert into public.people (id, display_name, is_verified)
+values ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'Available Person', true);
+
+select lives_ok(
+  $$ select * from public.create_invitation_record(
+       'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+       'newmember@example.com',
+       '11111111-1111-1111-1111-111111111111',
+       'new-test-token-hash'
+     ) $$,
+  'authorized invitation transaction succeeds'
+);
+
+select results_eq(
+  $$ select count(*)::bigint from public.invitations
+     where target_person_id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'
+       and status = 'pending' $$,
+  $$ values (1::bigint) $$,
+  'invitation transaction creates one pending invitation'
+);
+
+select results_eq(
+  $$ select count(*)::bigint from public.audit_events
+     where action = 'invitation.created'
+       and target_id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee' $$,
+  $$ values (1::bigint) $$,
+  'invitation transaction appends an audit event'
+);
+
+select lives_ok(
+  $$ select public.revoke_invitation_after_delivery_failure(
+       (select id from public.invitations
+        where target_person_id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'),
+       '11111111-1111-1111-1111-111111111111'
+     ) $$,
+  'delivery failure compensation succeeds'
+);
+
+select results_eq(
+  $$ select count(*)::bigint from public.invitations
+     where target_person_id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'
+       and status = 'revoked' $$,
+  $$ values (1::bigint) $$,
+  'delivery failure compensation revokes the pending invitation'
+);
 set local request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 set local request.jwt.claims = '{"sub":"33333333-3333-3333-3333-333333333333","email":"member@example.com","role":"authenticated"}';
 set local role authenticated;
