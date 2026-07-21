@@ -1,6 +1,6 @@
 begin;
 
-select plan(37);
+select plan(43);
 
 select has_table('public', 'people', 'people table exists');
 select has_table('public', 'accounts', 'accounts table exists');
@@ -205,6 +205,76 @@ select results_eq(
 );
 
 reset role;
+
+insert into public.people (id, display_name, is_verified)
+values ('ffffffff-ffff-ffff-ffff-ffffffffffff', 'Expired Invite Target', true);
+
+insert into public.invitations (
+  id, invited_email, target_person_id, invited_by, token_hash, status,
+  created_at, expires_at
+)
+values (
+  'ffffffff-ffff-ffff-ffff-000000000001',
+  'expired@example.com',
+  'ffffffff-ffff-ffff-ffff-ffffffffffff',
+  '11111111-1111-1111-1111-111111111111',
+  'expired-test-token-hash',
+  'pending',
+  now() - interval '2 hours',
+  now() - interval '1 hour'
+);
+
+select lives_ok(
+  $$ select * from public.create_invitation_record(
+       'ffffffff-ffff-ffff-ffff-ffffffffffff',
+       'replacement@example.com',
+       '11111111-1111-1111-1111-111111111111',
+       'replacement-test-token-hash'
+     ) $$,
+  'expired invitation does not permanently block a replacement'
+);
+
+select results_eq(
+  $$ select count(*)::bigint from public.invitations
+     where id = 'ffffffff-ffff-ffff-ffff-000000000001'
+       and status = 'expired' $$,
+  $$ values (1::bigint) $$,
+  'replacement transaction marks the old invitation expired'
+);
+
+select results_eq(
+  $$ select count(*)::bigint from public.invitations
+     where target_person_id = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
+       and status = 'pending' $$,
+  $$ values (1::bigint) $$,
+  'replacement transaction creates one active pending invitation'
+);
+
+select lives_ok(
+  $$ update public.accounts
+     set status = 'suspended'
+     where user_id = '33333333-3333-3333-3333-333333333333' $$,
+  'suspending an approved account preserves its person claim'
+);
+
+select results_eq(
+  $$ select person_id from public.accounts
+     where user_id = '33333333-3333-3333-3333-333333333333' $$,
+  $$ values ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid) $$,
+  'suspended account remains linked to its claimed person'
+);
+
+select throws_ok(
+  $$ select * from public.create_invitation_record(
+       'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+       'takeover@example.com',
+       '11111111-1111-1111-1111-111111111111',
+       'takeover-test-token-hash'
+     ) $$,
+  'P0001',
+  'target_unavailable',
+  'suspended account person cannot be invited or claimed again'
+);
 
 select * from finish();
 rollback;
