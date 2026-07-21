@@ -6,6 +6,8 @@ workflows:
     environment:
       xcode: latest
     scripts:
+      - name: Test app core
+        script: swift test --package-path Packages/BhargavaCore
       - name: Build for iOS Simulator
         script: |
           xcodebuild \
@@ -25,6 +27,8 @@ workflows:
     integrations:
       app_store_connect: bhargava-family-appstore
     environment:
+      groups:
+        - supabase_production
       xcode: latest
       vars:
         BUNDLE_ID: com.bhargava.familyapp
@@ -34,6 +38,28 @@ workflows:
         certificates:
           - bhargava_distribution
     scripts:
+      - name: Validate release configuration
+        script: |
+          set -euo pipefail
+          python3 <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          url = os.environ.get("SUPABASE_URL", "")
+          key = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")
+          parsed = urlparse(url)
+
+          if parsed.scheme != "https" or not parsed.hostname:
+              raise SystemExit("SUPABASE_URL must be a valid HTTPS URL")
+          if not key or key == "replace-me" or "$(" in key:
+              raise SystemExit("SUPABASE_PUBLISHABLE_KEY is missing or unresolved")
+          if key.lower().startswith("sb_secret_"):
+              raise SystemExit("A Supabase secret key must never be embedded in the iOS app")
+          PY
+      - name: Test app core
+        script: swift test --package-path Packages/BhargavaCore
+      - name: Set unique build number
+        script: agvtool new-version -all "$BUILD_NUMBER"
       - name: Generate App Store app icons
         script: |
           python3 <<'PY'
@@ -102,7 +128,8 @@ workflows:
         script: |
           xcode-project build-ipa \
             --project "$CM_BUILD_DIR/BhargavaFamilyApp.xcodeproj" \
-            --scheme "BhargavaFamilyApp"
+            --scheme "BhargavaFamilyApp" \
+            --archive-xcargs "SUPABASE_URL=$SUPABASE_URL SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
@@ -110,5 +137,5 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration
-        submit_to_testflight: false
+        submit_to_testflight: true
         submit_to_app_store: false
