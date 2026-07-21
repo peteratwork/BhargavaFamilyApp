@@ -1,6 +1,6 @@
 begin;
 
-select plan(79);
+select plan(80);
 
 select has_table('public', 'people', 'people table exists');
 select has_table('public', 'accounts', 'accounts table exists');
@@ -28,6 +28,12 @@ select is(
   (select cousin_depth_limit from public.app_policies where singleton),
   3::smallint,
   'relationship policy defaults to third cousins'
+);
+
+select is(
+  (select invitation_lifetime_hours from public.app_policies where singleton),
+  1,
+  'application invitation lifetime matches the one-hour Auth email lifetime'
 );
 
 insert into auth.users (id, email)

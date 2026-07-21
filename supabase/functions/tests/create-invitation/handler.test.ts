@@ -94,6 +94,25 @@ Deno.test('rejects invalid email before accessing the repository', async () => {
   assertEquals(accessedRepository, false)
 })
 
+Deno.test('rejects a non-UUID target before accessing the repository', async () => {
+  let accessedRepository = false
+  const response = await createInvitation(
+    { targetPersonId: 'not-a-uuid', email: 'member@example.com' },
+    {
+      actor: { userId: crypto.randomUUID(), role: 'admin', status: 'approved' },
+      repository: fakeRepository({
+        targetIsAvailable: async () => {
+          accessedRepository = true
+          return true
+        },
+      }),
+    },
+  )
+
+  assertEquals(response, { ok: false, status: 400, code: 'invalid_request' })
+  assertEquals(accessedRepository, false)
+})
+
 Deno.test('rejects an unavailable target without sending email', async () => {
   let sentEmail = false
   const response = await createInvitation(
