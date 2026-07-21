@@ -14,6 +14,10 @@ final class SupabaseAuthenticationRepositoryTests: XCTestCase {
         }
     }
 
+    func testAccountLookupUsesMigratedPrimaryKeyColumn() {
+        XCTAssertEqual(SupabaseDatabaseSchema.accountUserIDColumn, "user_id")
+    }
+
     func testOTPRequestDisablesAccountCreationAndUsesConfiguredCallback() async throws {
         let callbackURL = try XCTUnwrap(URL(string: "bhargavafamily://auth-callback"))
         let service = StubSupabaseAuthService()
