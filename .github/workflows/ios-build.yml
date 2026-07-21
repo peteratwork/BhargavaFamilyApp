@@ -33,7 +33,7 @@ jobs:
         run: |
           xcodebuild \
             -project BhargavaFamilyApp.xcodeproj \
-            -target BhargavaFamilyApp \
+            -scheme BhargavaFamilyApp \
             -destination 'generic/platform=iOS Simulator' \
             -configuration Debug \
             -showBuildTimingSummary \
