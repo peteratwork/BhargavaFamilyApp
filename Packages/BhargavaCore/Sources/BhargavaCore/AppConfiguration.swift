@@ -32,7 +32,9 @@ public struct AppConfiguration: Equatable, Sendable {
         guard
             let publishableKey = values["SUPABASE_PUBLISHABLE_KEY"],
             !publishableKey.isEmpty,
-            publishableKey != "replace-me"
+            publishableKey != "replace-me",
+            !publishableKey.contains("$("),
+            !publishableKey.lowercased().hasPrefix("sb_secret_")
         else {
             throw ConfigurationError.invalid("SUPABASE_PUBLISHABLE_KEY")
         }
