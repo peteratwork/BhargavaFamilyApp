@@ -49,9 +49,21 @@ Run `ios-release-archive` only from a reviewed commit. It:
 5. creates a signed IPA; and
 6. uploads to TestFlight without submitting to App Store review.
 
+### Automatic post-merge releases
+
+`ios-release-archive` watches only push events on `main`. GitHub must require pull requests for `main`; otherwise a direct push is also a production release. Require the check contexts `Backend Tests / Supabase database and functions` and `iOS Build / Build for iOS Simulator`, require resolved conversations, and block force pushes and branch deletion. Do not use an administrator bypass during normal development.
+
+In Codemagic, keep the GitHub webhook active under **BhargavaFamilyApp → Webhooks**. If deliveries are missing, use **Update webhook**, then inspect **Recent deliveries** before retrying a merge. Rapid successive merges cancel older webhook-triggered archives so only the newest `main` commit continues.
+
 If validation, tests, signing, or archive fails, no TestFlight upload occurs. Confirm the build in App Store Connect and assign beta testers deliberately after smoke testing.
 
 Both Codemagic workflows wait for the GitHub **Backend Tests** workflow to pass at the exact `CM_COMMIT` SHA before starting an iOS test or build. The repository is public, so this gate needs no additional GitHub credential; if the repository becomes private, add a read-only `GITHUB_TOKEN` to Codemagic.
+
+## Apple export compliance
+
+The iOS app declares `ITSAppUsesNonExemptEncryption` as `NO`. At the 2026-07-20 review, application sources contained no custom cryptography, Supabase networking used the Apple URL loading stack, and the pinned `swift-crypto` dependency delegated to CryptoKit on Apple platforms rather than bundling its non-Apple BoringSSL implementation. This supports the exempt-encryption answer for the current iOS binary; the repository record is technical evidence, not legal advice.
+
+Repeat the App Store Connect export-compliance determination before release if app code begins importing cryptography APIs; any cryptography dependency is added, removed, version-updated, transitive-resolution-changed, or has a linkage or product change; distribution countries change; or Apple changes its questionnaire. This includes `CryptoExtras` and another bundled implementation. If Apple requires documentation, set `ITSAppUsesNonExemptEncryption` to `YES` and add the approved `ITSEncryptionExportComplianceCode`; never leave an inaccurate `NO` declaration merely to keep automation green.
 
 ## Operational checks
 
