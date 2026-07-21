@@ -18,8 +18,12 @@ Before inviting real users:
 3. Configure the iOS redirect URL `bhargavafamily://auth-callback`.
 4. Keep public sign-up disabled. Invitations must be created by the protected server function.
 5. Configure production SMTP with SPF, DKIM, and DMARC. Disable link tracking that rewrites authentication links.
-6. Apply migrations only from a reviewed commit and never run `supabase/seed.sql` against production.
-7. Store the service-role key, SMTP password, and deployment token only in protected server/deployment settings. They must never appear in Codemagic client configuration or an app binary.
+6. Under **Authentication → Sign In / Providers → Email**, set Email OTP expiration to `3600` seconds and the resend cooldown to `60` seconds. Keep `app_policies.invitation_lifetime_hours` at `1`; invite links use the same Auth expiry clock.
+7. Customize the Invite template with `{{ .ConfirmationURL }}` and the Magic Link template with `{{ .Token }}` so normal sign-in sends the six-digit OTP expected by the app. Send test messages through the production SMTP route before inviting users.
+8. Start with 30 email/OTP sends per hour and the 60-second per-address cooldown, then tune only from sanitized `429` telemetry. Record every dashboard change in the deployment record.
+9. Do not enable CAPTCHA until the native sign-in client supplies a valid Turnstile or hCaptcha token. CAPTCHA client support and a successful device test are release blockers before onboarding real users; a dashboard-only toggle would make every current OTP request fail.
+10. Apply migrations only from a reviewed commit and never run `supabase/seed.sql` against production.
+11. Store the service-role key, SMTP password, and deployment token only in protected server/deployment settings. They must never appear in Codemagic client configuration or an app binary.
 
 ## Codemagic variable group
 
@@ -56,6 +60,70 @@ Both Codemagic workflows wait for the GitHub **Backend Tests** workflow to pass 
 - Record sanitized p50/p95 request latency by broad region; never log email, names, tokens, claim notes, or relationships.
 - Review backup status before each production migration.
 - Keep a rollback-compatible prior TestFlight build available until the new build passes authentication and access-control smoke tests.
+
+## Approval-gated deployment checklist
+
+Run these commands from the reviewed commit. Use a shell session whose history is disabled or protected; never paste access tokens, database passwords, SMTP credentials, or service-role keys into a shared log.
+
+### 1. Local and CI preflight
+
+```bash
+npm ci
+npx supabase start --exclude edge-runtime,imgproxy,logflare,postgres-meta,realtime,storage-api,studio,supavisor,vector
+npx supabase db reset
+npx supabase db lint --local --level warning
+npx supabase test db
+npm run functions:test
+npx deno check supabase/functions/create-invitation/index.ts
+python3 -m unittest discover -s scripts/tests -v
+npx supabase stop --no-backup
+```
+
+Confirm the GitHub **Backend Tests** and **iOS Build** checks succeeded for the same full commit SHA. A success on another commit is not evidence for deployment.
+
+### 2. Development deployment and integration smoke test
+
+```bash
+npx supabase login
+npx supabase link --project-ref "$DEV_PROJECT_REF"
+npx supabase migration list --linked
+npx supabase db push --linked --dry-run
+npx supabase db push --linked
+npx supabase secrets set INVITATION_REDIRECT_URL=bhargavafamily://auth-callback --project-ref "$DEV_PROJECT_REF"
+npx supabase functions deploy create-invitation --project-ref "$DEV_PROJECT_REF"
+```
+
+Use synthetic identities only. Record pass/fail evidence for all of these cases:
+
+1. no token → `401`; approved member → `403`; trusted elder/admin → `201`;
+2. invalid JSON and invalid target UUID → `400 invalid_request`;
+3. unavailable person → `409`, with no email and no new pending invitation;
+4. email-delivery failure → revoked invitation plus audit event;
+5. valid invite → callback → pending routing, followed by sign-out;
+6. OTP/invite link immediately before and after the one-hour expiry boundary;
+7. pending, suspended, and closed accounts cannot read family data.
+
+Do not proceed if the development migration list diverges, any smoke test fails, or logs contain personal data or credentials.
+
+### 3. Production preflight and approval stop
+
+1. Confirm the reviewed commit SHA, successful exact-SHA checks, change ticket, operator, and independent reviewer.
+2. Confirm the latest production backup timestamp and document who can initiate restore.
+3. Link production, run `npx supabase migration list --linked`, and compare every local and remote migration timestamp.
+4. Run `npx supabase db push --linked --dry-run` and attach the output to the change record.
+5. Verify SMTP, redirect allowlist, one-hour OTP expiration, 60-second resend cooldown, rate limits, email templates, and CAPTCHA release condition.
+6. **Stop here. Obtain explicit written approval immediately before either production mutation below.** Approval of the pull request or Codemagic build is not deployment approval.
+
+### 4. Production mutation after approval
+
+```bash
+npx supabase db push --linked
+npx supabase secrets set INVITATION_REDIRECT_URL=bhargavafamily://auth-callback --project-ref "$PROD_PROJECT_REF"
+npx supabase functions deploy create-invitation --project-ref "$PROD_PROJECT_REF"
+npx supabase migration list --linked
+```
+
+Do not use `--include-seed`. After deployment, repeat the synthetic integration smoke test, preserve sanitized evidence, run `ios-release-archive`, confirm TestFlight processing, and assign testers manually. If verification fails, stop invitations, retain evidence, and choose a reviewed forward migration or backup restore; never edit an already-applied migration in place.
 
 ## First administrator bootstrap
 
