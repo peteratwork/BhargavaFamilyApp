@@ -12,6 +12,10 @@ enum SupabaseClientConfiguration {
     }
 }
 
+enum SupabaseDatabaseSchema {
+    static let accountUserIDColumn = "user_id"
+}
+
 struct RemoteAuthenticatedUser: Equatable, Sendable {
     let userID: UUID
     let email: String
@@ -208,7 +212,7 @@ private final class LiveSupabaseAuthService: SupabaseAuthService, @unchecked Sen
         let response: PostgrestResponse<[AccountRow]> = try await client
             .from("accounts")
             .select("status,role,person_id")
-            .eq("id", value: userID.uuidString)
+            .eq(SupabaseDatabaseSchema.accountUserIDColumn, value: userID.uuidString)
             .limit(1)
             .execute()
 
