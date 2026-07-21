@@ -61,6 +61,26 @@ final class AppSessionTests: XCTestCase {
         XCTAssertEqual(session.state, .awaitingEmail(email: "member@example.com"))
     }
 
+    func testInvalidEmailDoesNotReachRepository() async {
+        let repository = StubAuthenticationRepository(restoredUser: nil)
+        let session = AppSession(repository: repository, initialState: .signedOut)
+
+        await session.requestOTP(email: "not-an-email")
+
+        XCTAssertEqual(repository.requestedEmails, [])
+        XCTAssertEqual(session.state, .failed(.invalidEmail))
+    }
+
+    func testWhitespaceOnlyEmailDoesNotReachRepository() async {
+        let repository = StubAuthenticationRepository(restoredUser: nil)
+        let session = AppSession(repository: repository, initialState: .signedOut)
+
+        await session.requestOTP(email: "   \n")
+
+        XCTAssertEqual(repository.requestedEmails, [])
+        XCTAssertEqual(session.state, .failed(.invalidEmail))
+    }
+
     func testSignOutClearsRepositorySessionBeforePublishingSignedOut() async {
         let repository = StubAuthenticationRepository(
             restoredUser: .init(userID: UUID(), email: "member@example.com"),
