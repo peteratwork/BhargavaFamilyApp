@@ -34,7 +34,7 @@ jobs:
       - name: Start local Supabase
         run: >-
           npx supabase start
-          --exclude analytics,edge-runtime,functions,imgproxy,inbucket,kong,meta,realtime,rest,storage,studio,vector
+          --exclude edge-runtime,imgproxy,logflare,postgres-meta,realtime,storage-api,studio,supavisor,vector
 
       - name: Rebuild database from migrations
         run: npx supabase db reset
