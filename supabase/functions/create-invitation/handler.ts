@@ -32,10 +32,16 @@ export type CreateInvitationResult =
   | {
       ok: false
       status: 400 | 403 | 409
-      code: 'invalid_email' | 'not_authorized' | 'target_unavailable' | 'delivery_failed'
+      code:
+        | 'invalid_request'
+        | 'invalid_email'
+        | 'not_authorized'
+        | 'target_unavailable'
+        | 'delivery_failed'
     }
 
 const emailPattern = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function createInvitation(
   input: CreateInvitationInput,
@@ -43,7 +49,11 @@ export async function createInvitation(
 ): Promise<CreateInvitationResult> {
   const email = input.email.trim().toLocaleLowerCase('en-US')
 
-  if (!emailPattern.test(email)) {
+  if (!uuidPattern.test(input.targetPersonId)) {
+    return { ok: false, status: 400, code: 'invalid_request' }
+  }
+
+  if (email.length > 254 || !emailPattern.test(email)) {
     return { ok: false, status: 400, code: 'invalid_email' }
   }
 

@@ -5,6 +5,7 @@ import {
   type Actor,
   type InvitationRepository,
 } from './handler.ts'
+import { parseInvitationRequest } from './request.ts'
 
 const supabaseURL = Deno.env.get('SUPABASE_URL') ?? ''
 const publishableKey = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
@@ -137,10 +138,8 @@ Deno.serve(async (request) => {
       return jsonResponse({ code: 'not_authorized' }, 403, correlationID)
     }
 
-    const body = await request.json() as { targetPersonId?: unknown; email?: unknown }
-    if (typeof body.targetPersonId !== 'string' || typeof body.email !== 'string') {
-      return jsonResponse({ code: 'invalid_request' }, 400, correlationID)
-    }
+    const parsedRequest = await parseInvitationRequest(request)
+    if (!parsedRequest.ok) return jsonResponse({ code: parsedRequest.code }, 400, correlationID)
 
     const actor: Actor = {
       userId: userData.user.id,
@@ -151,7 +150,7 @@ Deno.serve(async (request) => {
       auth: { persistSession: false, autoRefreshToken: false },
     })
     const result = await createInvitation(
-      { targetPersonId: body.targetPersonId, email: body.email },
+      parsedRequest.input,
       {
         actor,
         repository: new SupabaseInvitationRepository(
