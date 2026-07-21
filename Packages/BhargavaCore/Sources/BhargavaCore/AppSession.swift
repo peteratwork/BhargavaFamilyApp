@@ -12,6 +12,7 @@ public final class AppSession {
         case pendingClaim
         case approved(AccountAccess)
         case blocked
+        case accountRefreshFailed
         case failed(SessionError)
     }
 
@@ -20,6 +21,7 @@ public final class AppSession {
     public private(set) var otpVerificationFailed = false
 
     private let repository: any AuthenticationRepository
+    private let authenticationMutations = AuthenticationMutationQueue()
     private var operationGeneration = 0
 
     public init(
@@ -32,16 +34,29 @@ public final class AppSession {
 
     public func restore() async {
         let operation = beginOperation(state: .restoring)
+        let restoredUser: AuthenticatedUser?
+        let repository = self.repository
 
         do {
-            let restoredUser = try await repository.restoreSession()
-            guard isCurrent(operation) else { return }
-
-            guard restoredUser != nil else {
-                state = .signedOut
-                return
+            restoredUser = try await authenticationMutations.run {
+                try await repository.restoreSession()
             }
+        } catch AuthenticationRepositoryError.sessionExpired {
+            await expireSession(operation: operation)
+            return
+        } catch {
+            guard isCurrent(operation) else { return }
+            state = .failed(.serviceUnavailable)
+            return
+        }
 
+        guard isCurrent(operation) else { return }
+        guard restoredUser != nil else {
+            state = .signedOut
+            return
+        }
+
+        do {
             let destination = try await accountDestination()
             guard isCurrent(operation) else { return }
             state = destination
@@ -49,7 +64,7 @@ public final class AppSession {
             await expireSession(operation: operation)
         } catch {
             guard isCurrent(operation) else { return }
-            state = .failed(.serviceUnavailable)
+            state = .accountRefreshFailed
         }
     }
 
@@ -64,7 +79,7 @@ public final class AppSession {
             await expireSession(operation: operation)
         } catch {
             guard isCurrent(operation) else { return }
-            state = .failed(.serviceUnavailable)
+            state = .accountRefreshFailed
         }
     }
 
@@ -105,11 +120,24 @@ public final class AppSession {
                 isVerifyingOTP = false
             }
         }
+        let repository = self.repository
 
         do {
-            _ = try await repository.verifyEmailOTP(email: email, code: code)
+            _ = try await authenticationMutations.run {
+                try await repository.verifyEmailOTP(email: email, code: code)
+            }
+        } catch AuthenticationRepositoryError.sessionExpired {
+            await expireSession(operation: operation)
+            return
+        } catch {
             guard isCurrent(operation) else { return }
+            otpVerificationFailed = true
+            state = .awaitingEmail(email: email)
+            return
+        }
 
+        guard isCurrent(operation) else { return }
+        do {
             let destination = try await accountDestination()
             guard isCurrent(operation) else { return }
             state = destination
@@ -117,32 +145,46 @@ public final class AppSession {
             await expireSession(operation: operation)
         } catch {
             guard isCurrent(operation) else { return }
-            otpVerificationFailed = true
-            state = .awaitingEmail(email: email)
+            state = .accountRefreshFailed
         }
     }
 
     public func handleCallback(_ url: URL) async {
         let operation = beginOperation(state: .restoring)
+        let repository = self.repository
 
         do {
-            _ = try await repository.handleCallback(url)
+            _ = try await authenticationMutations.run {
+                try await repository.handleCallback(url)
+            }
             guard isCurrent(operation) else { return }
 
-            let destination = try await accountDestination()
-            guard isCurrent(operation) else { return }
-            state = destination
         } catch {
             guard isCurrent(operation) else { return }
             state = .failed(.authenticationFailed)
+            return
+        }
+
+        do {
+            let destination = try await accountDestination()
+            guard isCurrent(operation) else { return }
+            state = destination
+        } catch AuthenticationRepositoryError.sessionExpired {
+            await expireSession(operation: operation)
+        } catch {
+            guard isCurrent(operation) else { return }
+            state = .accountRefreshFailed
         }
     }
 
     public func signOut() async {
         let operation = beginOperation(state: state)
+        let repository = self.repository
 
         do {
-            try await repository.signOut()
+            try await authenticationMutations.run {
+                try await repository.signOut()
+            }
             guard isCurrent(operation) else { return }
             state = .signedOut
         } catch {
@@ -177,8 +219,29 @@ public final class AppSession {
 
     private func expireSession(operation: Int) async {
         guard isCurrent(operation) else { return }
-        try? await repository.signOut()
+        let repository = self.repository
+        try? await authenticationMutations.run {
+            try await repository.signOut()
+        }
         guard isCurrent(operation) else { return }
         state = .signedOut
+    }
+}
+
+private actor AuthenticationMutationQueue {
+    private var tail = Task<Void, Never> {}
+
+    func run<Value: Sendable>(
+        _ operation: @escaping @Sendable () async throws -> Value
+    ) async throws -> Value {
+        let predecessor = tail
+        let task = Task<Value, Error> {
+            await predecessor.value
+            return try await operation()
+        }
+        tail = Task {
+            _ = try? await task.value
+        }
+        return try await task.value
     }
 }

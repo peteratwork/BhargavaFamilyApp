@@ -28,6 +28,8 @@ struct AuthenticationRootView: View {
                     }
             case .blocked:
                 BlockedAccountView(session: session)
+            case .accountRefreshFailed:
+                AccountRefreshFailureView(session: session)
             case .failed(let error):
                 SignInView(session: session, error: error)
             }
@@ -43,6 +45,30 @@ struct AuthenticationRootView: View {
             Task {
                 await session.refreshAccount()
                 isRevalidatingApprovedAccess = false
+            }
+        }
+    }
+}
+
+private struct AccountRefreshFailureView: View {
+    let session: AppSession
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("Unable to check membership", systemImage: "wifi.exclamationmark")
+        } description: {
+            Text("You are signed in, but membership status could not be refreshed. Try again without requesting a new code.")
+        } actions: {
+            VStack(spacing: 12) {
+                Button("Try again") {
+                    Task { await session.refreshAccount() }
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button("Sign out") {
+                    Task { await session.signOut() }
+                }
+                .buttonStyle(.bordered)
             }
         }
     }
