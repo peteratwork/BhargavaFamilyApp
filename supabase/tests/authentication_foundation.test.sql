@@ -1,6 +1,6 @@
 begin;
 
-select plan(91);
+select plan(97);
 
 select has_table('public', 'people', 'people table exists');
 select has_table('public', 'accounts', 'accounts table exists');
@@ -345,6 +345,32 @@ select results_eq(
   $$ values ('closed'::public.account_status) $$,
   'revoking an invitation closes its pending application account'
 );
+
+select lives_ok(
+  $$ select * from public.create_invitation_record(
+       'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+       'newmember@example.com',
+       '11111111-1111-1111-1111-111111111111',
+       'reactivated-test-token-hash'
+     ) $$,
+  'a closed unclaimed Auth identity can be invited again'
+);
+
+select results_eq(
+  $$ select count(*)::bigint from public.invitations
+     where target_person_id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'
+       and status = 'pending'
+       and accepted_by = '55555555-5555-5555-5555-555555555555' $$,
+  $$ values (1::bigint) $$,
+  'replacement invitation reuses and links the closed Auth identity'
+);
+
+select results_eq(
+  $$ select status from public.accounts
+     where user_id = '55555555-5555-5555-5555-555555555555' $$,
+  $$ values ('pending'::public.account_status) $$,
+  'replacement invitation reactivates the closed application account'
+);
 set local request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 set local request.jwt.claims = '{"sub":"33333333-3333-3333-3333-333333333333","email":"member@example.com","role":"authenticated"}';
 set local role authenticated;
@@ -478,6 +504,52 @@ select results_eq(
      where user_id = '66666666-6666-6666-6666-666666666666' $$,
   $$ values ('closed'::public.account_status) $$,
   'time-based invitation expiry closes the linked account'
+);
+
+insert into public.people (id, display_name, is_verified)
+values
+  ('78787878-7878-7878-7878-787878787878', 'Old Email Target', true),
+  ('89898989-8989-8989-8989-898989898989', 'Replacement Email Target', true);
+
+insert into public.invitations (
+  id, invited_email, target_person_id, invited_by, token_hash, status,
+  created_at, expires_at
+)
+values (
+  '78787878-7878-7878-7878-000000000001',
+  'reusable-email@example.com',
+  '78787878-7878-7878-7878-787878787878',
+  '11111111-1111-1111-1111-111111111111',
+  'reusable-email-old-token-hash',
+  'pending',
+  now() - interval '2 hours',
+  now() - interval '1 hour'
+);
+
+select lives_ok(
+  $$ select * from public.create_invitation_record(
+       '89898989-8989-8989-8989-898989898989',
+       'reusable-email@example.com',
+       '11111111-1111-1111-1111-111111111111',
+       'reusable-email-new-token-hash'
+     ) $$,
+  'expired pending email on another target does not block replacement'
+);
+
+select results_eq(
+  $$ select status from public.invitations
+     where id = '78787878-7878-7878-7878-000000000001' $$,
+  $$ values ('expired'::public.invitation_status) $$,
+  'replacement expires the old pending invitation by normalized email'
+);
+
+select results_eq(
+  $$ select count(*)::bigint from public.invitations
+     where target_person_id = '89898989-8989-8989-8989-898989898989'
+       and invited_email = 'reusable-email@example.com'
+       and status = 'pending' $$,
+  $$ values (1::bigint) $$,
+  'replacement creates the new pending invitation after email cleanup'
 );
 
 select lives_ok(
