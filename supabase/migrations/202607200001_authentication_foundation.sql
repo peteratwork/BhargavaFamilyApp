@@ -29,7 +29,11 @@ create table public.accounts (
   status public.account_status not null default 'pending',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  check ((status = 'pending') = (person_id is null))
+  check (
+    (status = 'pending' and person_id is null)
+    or (status in ('approved', 'suspended') and person_id is not null)
+    or status = 'closed'
+  )
 );
 
 create or replace function public.create_pending_account()
@@ -108,6 +112,20 @@ create table public.audit_events (
   occurred_at timestamptz not null default now()
 );
 
+create or replace function public.prevent_audit_event_mutation()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  raise exception 'audit_events_are_immutable' using errcode = 'P0001';
+end;
+$$;
+
+create trigger prevent_audit_event_mutation
+before update or delete on public.audit_events
+for each row execute function public.prevent_audit_event_mutation();
+
 create or replace function public.current_account()
 returns public.accounts
 language sql
@@ -151,6 +169,7 @@ grant select on public.claims to authenticated;
 grant select on public.app_policies to authenticated;
 
 revoke all on public.audit_events from anon, authenticated;
+revoke insert, update, delete on public.audit_events from service_role;
 revoke insert, update, delete on public.people from anon, authenticated;
 revoke insert, update, delete on public.accounts from anon, authenticated;
 revoke insert, update, delete on public.invitations from anon, authenticated;
@@ -159,6 +178,7 @@ revoke insert, update, delete on public.app_policies from anon, authenticated;
 
 revoke all on function public.current_account() from public;
 revoke all on function public.is_reviewer() from public;
+revoke all on function public.prevent_audit_event_mutation() from public;
 grant execute on function public.current_account() to authenticated;
 grant execute on function public.is_reviewer() to authenticated;
 
@@ -210,11 +230,11 @@ declare
   v_expires_at timestamptz;
   v_lifetime_hours integer;
 begin
-  update public.invitations
+  update public.invitations as i
   set status = 'expired'
-  where target_person_id = p_target_person_id
-    and status = 'pending'
-    and expires_at <= now();
+  where i.target_person_id = p_target_person_id
+    and i.status = 'pending'
+    and i.expires_at <= now();
 
   if not exists (
     select 1
