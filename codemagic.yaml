@@ -6,6 +6,8 @@ workflows:
     environment:
       xcode: latest
     scripts:
+      - name: Verify backend CI for this commit
+        script: python3 scripts/require_backend_ci.py
       - name: Test app core
         script: swift test --package-path Packages/BhargavaCore
       - name: Build for iOS Simulator
@@ -65,6 +67,8 @@ workflows:
           if claims.get("role") == "service_role":
               raise SystemExit("A legacy service-role JWT must never be embedded in the iOS app")
           PY
+      - name: Verify backend CI for this commit
+        script: python3 scripts/require_backend_ci.py
       - name: Test app core
         script: swift test --package-path Packages/BhargavaCore
       - name: Set unique build number
