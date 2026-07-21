@@ -1,6 +1,6 @@
 begin;
 
-select plan(80);
+select plan(91);
 
 select has_table('public', 'people', 'people table exists');
 select has_table('public', 'accounts', 'accounts table exists');
@@ -11,6 +11,7 @@ select has_table('public', 'audit_events', 'audit events table exists');
 
 select has_function('public', 'current_account', 'current account helper exists');
 select has_function('public', 'is_reviewer', 'reviewer helper exists');
+select has_function('public', 'refresh_own_account_state', 'account lifecycle refresh exists');
 
 select ok((select relrowsecurity from pg_class where oid = 'public.people'::regclass), 'people RLS enabled');
 select ok((select relrowsecurity from pg_class where oid = 'public.accounts'::regclass), 'accounts RLS enabled');
@@ -242,6 +243,24 @@ select ok(
   'authenticated clients cannot execute invitation transaction directly'
 );
 
+select ok(
+  has_function_privilege(
+    'authenticated',
+    'public.refresh_own_account_state()',
+    'execute'
+  ),
+  'authenticated clients can refresh only their own account lifecycle'
+);
+
+select ok(
+  not has_function_privilege(
+    'anon',
+    'public.refresh_own_account_state()',
+    'execute'
+  ),
+  'anonymous clients cannot execute account lifecycle refresh'
+);
+
 insert into public.people (id, display_name, is_verified)
 values ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'Available Person', true);
 
@@ -286,6 +305,23 @@ select throws_ok(
   'audit events cannot be deleted even by a privileged connection'
 );
 
+insert into auth.users (id, email)
+values ('55555555-5555-5555-5555-555555555555', 'newmember@example.com');
+
+select results_eq(
+  $$ select accepted_by from public.invitations
+     where target_person_id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee' $$,
+  $$ values ('55555555-5555-5555-5555-555555555555'::uuid) $$,
+  'Auth user creation links the active application invitation'
+);
+
+select results_eq(
+  $$ select status from public.accounts
+     where user_id = '55555555-5555-5555-5555-555555555555' $$,
+  $$ values ('pending'::public.account_status) $$,
+  'newly linked invitee starts pending'
+);
+
 select lives_ok(
   $$ select public.revoke_invitation_after_delivery_failure(
        (select id from public.invitations
@@ -301,6 +337,13 @@ select results_eq(
        and status = 'revoked' $$,
   $$ values (1::bigint) $$,
   'delivery failure compensation revokes the pending invitation'
+);
+
+select results_eq(
+  $$ select status from public.accounts
+     where user_id = '55555555-5555-5555-5555-555555555555' $$,
+  $$ values ('closed'::public.account_status) $$,
+  'revoking an invitation closes its pending application account'
 );
 set local request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 set local request.jwt.claims = '{"sub":"33333333-3333-3333-3333-333333333333","email":"member@example.com","role":"authenticated"}';
@@ -381,6 +424,60 @@ select results_eq(
        and status = 'pending' $$,
   $$ values (1::bigint) $$,
   'replacement transaction creates one active pending invitation'
+);
+
+insert into public.people (id, display_name, is_verified)
+values ('67676767-6767-6767-6767-676767676767', 'Expiring Linked Target', true);
+
+select lives_ok(
+  $$ select * from public.create_invitation_record(
+       '67676767-6767-6767-6767-676767676767',
+       'expiring-linked@example.com',
+       '11111111-1111-1111-1111-111111111111',
+       'expiring-linked-token-hash'
+     ) $$,
+  'an active invitation can be linked for expiry enforcement'
+);
+
+insert into auth.users (id, email)
+values ('66666666-6666-6666-6666-666666666666', 'expiring-linked@example.com');
+
+select results_eq(
+  $$ select accepted_by from public.invitations
+     where target_person_id = '67676767-6767-6767-6767-676767676767' $$,
+  $$ values ('66666666-6666-6666-6666-666666666666'::uuid) $$,
+  'active invitation is linked to its Auth identity'
+);
+
+update public.invitations
+set created_at = now() - interval '2 hours',
+    expires_at = now() - interval '1 hour'
+where target_person_id = '67676767-6767-6767-6767-676767676767';
+
+set local request.jwt.claim.sub = '66666666-6666-6666-6666-666666666666';
+set local request.jwt.claims = '{"sub":"66666666-6666-6666-6666-666666666666","email":"expiring-linked@example.com","role":"authenticated"}';
+set local role authenticated;
+
+select results_eq(
+  $$ select status from public.refresh_own_account_state() $$,
+  $$ values ('closed'::text) $$,
+  'an expired invitation cannot replay into pending application access'
+);
+
+reset role;
+
+select results_eq(
+  $$ select status from public.invitations
+     where target_person_id = '67676767-6767-6767-6767-676767676767' $$,
+  $$ values ('expired'::public.invitation_status) $$,
+  'account refresh records time-based invitation expiry'
+);
+
+select results_eq(
+  $$ select status from public.accounts
+     where user_id = '66666666-6666-6666-6666-666666666666' $$,
+  $$ values ('closed'::public.account_status) $$,
+  'time-based invitation expiry closes the linked account'
 );
 
 select lives_ok(

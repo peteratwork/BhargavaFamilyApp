@@ -14,8 +14,8 @@ final class SupabaseAuthenticationRepositoryTests: XCTestCase {
         }
     }
 
-    func testAccountLookupUsesMigratedPrimaryKeyColumn() {
-        XCTAssertEqual(SupabaseDatabaseSchema.accountUserIDColumn, "user_id")
+    func testAccountLookupUsesLifecycleEnforcingRPC() {
+        XCTAssertEqual(SupabaseDatabaseSchema.accountAccessRPC, "refresh_own_account_state")
     }
 
     func testOTPRequestDisablesAccountCreationAndUsesConfiguredCallback() async throws {
