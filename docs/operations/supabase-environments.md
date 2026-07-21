@@ -53,6 +53,12 @@ If validation, tests, signing, or archive fails, no TestFlight upload occurs. Co
 
 Both Codemagic workflows wait for the GitHub **Backend Tests** workflow to pass at the exact `CM_COMMIT` SHA before starting an iOS test or build. The repository is public, so this gate needs no additional GitHub credential; if the repository becomes private, add a read-only `GITHUB_TOKEN` to Codemagic.
 
+## Apple export compliance
+
+The iOS app declares `ITSAppUsesNonExemptEncryption` as `NO`. At the 2026-07-20 review, application sources contained no custom cryptography, Supabase networking used the Apple URL loading stack, and the pinned `swift-crypto` dependency delegated to CryptoKit on Apple platforms rather than bundling its non-Apple BoringSSL implementation. This supports the exempt-encryption answer for the current iOS binary; the repository record is technical evidence, not legal advice.
+
+Repeat the App Store Connect export-compliance determination before release if app code begins importing cryptography APIs, a package adds `CryptoExtras` or another bundled implementation, distribution countries change, or Apple changes its questionnaire. If Apple requires documentation, set `ITSAppUsesNonExemptEncryption` to `YES` and add the approved `ITSEncryptionExportComplianceCode`; never leave an inaccurate `NO` declaration merely to keep automation green.
+
 ## Operational checks
 
 - Use synthetic accounts for the first signed smoke test.
