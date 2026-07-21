@@ -6,7 +6,7 @@ let package = Package(
     name: "BhargavaCore",
     platforms: [
         .iOS(.v17),
-        .macOS(.v13)
+        .macOS(.v14)
     ],
     products: [
         .library(name: "BhargavaCore", targets: ["BhargavaCore"])
