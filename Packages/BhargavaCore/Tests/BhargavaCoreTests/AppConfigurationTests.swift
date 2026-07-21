@@ -40,4 +40,28 @@ final class AppConfigurationTests: XCTestCase {
             )
         }
     }
+
+    func testRejectsUnexpandedBuildSettingKey() {
+        XCTAssertThrowsError(try AppConfiguration(values: [
+            "SUPABASE_URL": "https://family.supabase.co",
+            "SUPABASE_PUBLISHABLE_KEY": "$(SUPABASE_PUBLISHABLE_KEY)"
+        ])) { error in
+            XCTAssertEqual(
+                error as? AppConfiguration.ConfigurationError,
+                .invalid("SUPABASE_PUBLISHABLE_KEY")
+            )
+        }
+    }
+
+    func testRejectsSecretKey() {
+        XCTAssertThrowsError(try AppConfiguration(values: [
+            "SUPABASE_URL": "https://family.supabase.co",
+            "SUPABASE_PUBLISHABLE_KEY": "sb_secret_must_never_ship"
+        ])) { error in
+            XCTAssertEqual(
+                error as? AppConfiguration.ConfigurationError,
+                .invalid("SUPABASE_PUBLISHABLE_KEY")
+            )
+        }
+    }
 }
