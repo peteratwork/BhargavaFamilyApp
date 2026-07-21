@@ -16,6 +16,8 @@ public final class AppSession {
     }
 
     public private(set) var state: State
+    public private(set) var isVerifyingOTP = false
+    public private(set) var otpVerificationFailed = false
 
     private let repository: any AuthenticationRepository
     private var operationGeneration = 0
@@ -73,6 +75,7 @@ public final class AppSession {
             return
         }
         let operation = beginOperation(state: .requestingOTP(email: email))
+        otpVerificationFailed = false
 
         do {
             try await repository.requestEmailOTP(email)
@@ -82,6 +85,39 @@ public final class AppSession {
             guard isCurrent(operation) else { return }
             // Keep the public result identical for invited and unknown addresses.
             // This prevents account or invitation enumeration from the UI.
+            state = .awaitingEmail(email: email)
+        }
+    }
+
+    public func verifyOTP(email rawEmail: String, code rawCode: String) async {
+        let email = EmailAddress.normalized(rawEmail)
+        let code = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard code.count == 6, code.allSatisfy({ $0.isASCII && $0.isNumber }) else {
+            otpVerificationFailed = true
+            return
+        }
+
+        let operation = beginOperation(state: .awaitingEmail(email: email))
+        isVerifyingOTP = true
+        otpVerificationFailed = false
+        defer {
+            if isCurrent(operation) {
+                isVerifyingOTP = false
+            }
+        }
+
+        do {
+            _ = try await repository.verifyEmailOTP(email: email, code: code)
+            guard isCurrent(operation) else { return }
+
+            let destination = try await accountDestination()
+            guard isCurrent(operation) else { return }
+            state = destination
+        } catch AuthenticationRepositoryError.sessionExpired {
+            await expireSession(operation: operation)
+        } catch {
+            guard isCurrent(operation) else { return }
+            otpVerificationFailed = true
             state = .awaitingEmail(email: email)
         }
     }
@@ -130,6 +166,7 @@ public final class AppSession {
 
     private func beginOperation(state nextState: State) -> Int {
         operationGeneration &+= 1
+        isVerifyingOTP = false
         state = nextState
         return operationGeneration
     }

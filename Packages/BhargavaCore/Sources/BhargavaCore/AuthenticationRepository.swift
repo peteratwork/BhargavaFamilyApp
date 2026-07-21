@@ -7,6 +7,7 @@ public enum AuthenticationRepositoryError: Error, Equatable, Sendable {
 public protocol AuthenticationRepository: Sendable {
     func restoreSession() async throws -> AuthenticatedUser?
     func requestEmailOTP(_ email: String) async throws
+    func verifyEmailOTP(email: String, code: String) async throws -> AuthenticatedUser
     func handleCallback(_ url: URL) async throws -> AuthenticatedUser
     func fetchAccountAccess() async throws -> AccountAccess
     func signOut() async throws

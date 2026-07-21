@@ -33,6 +33,11 @@ struct OTPRequest: Equatable, Sendable {
     let shouldCreateUser: Bool
 }
 
+struct EmailOTPVerification: Equatable, Sendable {
+    let email: String
+    let code: String
+}
+
 protocol SupabaseAuthService: Sendable {
     func restoreUser() async throws -> RemoteAuthenticatedUser?
     func requestEmailOTP(
@@ -40,6 +45,7 @@ protocol SupabaseAuthService: Sendable {
         redirectTo: URL,
         shouldCreateUser: Bool
     ) async throws
+    func verifyEmailOTP(email: String, code: String) async throws -> RemoteAuthenticatedUser
     func user(from callbackURL: URL) async throws -> RemoteAuthenticatedUser
     func fetchAccountAccess() async throws -> RemoteAccountAccess
     func signOut() async throws
@@ -91,6 +97,14 @@ public actor SupabaseAuthenticationRepository: AuthenticationRepository {
     public func handleCallback(_ url: URL) async throws -> AuthenticatedUser {
         do {
             return Self.mapUser(try await service.user(from: url))
+        } catch {
+            throw Self.mapServiceError(error)
+        }
+    }
+
+    public func verifyEmailOTP(email: String, code: String) async throws -> AuthenticatedUser {
+        do {
+            return Self.mapUser(try await service.verifyEmailOTP(email: email, code: code))
         } catch {
             throw Self.mapServiceError(error)
         }
@@ -205,6 +219,15 @@ private final class LiveSupabaseAuthService: SupabaseAuthService, @unchecked Sen
 
     func user(from callbackURL: URL) async throws -> RemoteAuthenticatedUser {
         try mapUser((try await client.auth.session(from: callbackURL)).user)
+    }
+
+    func verifyEmailOTP(email: String, code: String) async throws -> RemoteAuthenticatedUser {
+        _ = try await client.auth.verifyOTP(
+            email: email,
+            token: code,
+            type: .email
+        )
+        return try mapUser((try await client.auth.session).user)
     }
 
     func fetchAccountAccess() async throws -> RemoteAccountAccess {

@@ -19,7 +19,7 @@ Before inviting real users:
 4. Keep public sign-up disabled. Invitations must be created by the protected server function.
 5. Configure production SMTP with SPF, DKIM, and DMARC. Disable link tracking that rewrites authentication links.
 6. Under **Authentication → Sign In / Providers → Email**, set Email OTP expiration to `3600` seconds and the resend cooldown to `60` seconds. Keep `app_policies.invitation_lifetime_hours` at `1`; invite links use the same Auth expiry clock.
-7. Customize the Invite template with `{{ .ConfirmationURL }}` and the Magic Link template with `{{ .Token }}` so normal sign-in sends the six-digit OTP expected by the app. Send test messages through the production SMTP route before inviting users.
+7. Customize the Invite template with `{{ .ConfirmationURL }}` for the initial administrator-issued invitation link. Customize the Magic Link template with `{{ .Token }}` so an in-app sign-in request sends the six-digit OTP accepted by the code-entry screen. Send and redeem both message types through the production SMTP route before inviting users.
 8. Start with 30 email/OTP sends per hour and the 60-second per-address cooldown, then tune only from sanitized `429` telemetry. Record every dashboard change in the deployment record.
 9. Do not enable CAPTCHA until the native sign-in client supplies a valid Turnstile or hCaptcha token. CAPTCHA client support and a successful device test are release blockers before onboarding real users; a dashboard-only toggle would make every current OTP request fail.
 10. Apply migrations only from a reviewed commit and never run `supabase/seed.sql` against production.
