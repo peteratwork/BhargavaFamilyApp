@@ -26,6 +26,14 @@ workflows:
     name: iOS release archive
     instance_type: mac_mini_m2
     max_build_duration: 60
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+      cancel_previous_builds: true
     integrations:
       app_store_connect: bhargava-family-appstore
     environment:

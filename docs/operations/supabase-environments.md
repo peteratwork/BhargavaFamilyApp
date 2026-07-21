@@ -49,6 +49,12 @@ Run `ios-release-archive` only from a reviewed commit. It:
 5. creates a signed IPA; and
 6. uploads to TestFlight without submitting to App Store review.
 
+### Automatic post-merge releases
+
+`ios-release-archive` watches only push events on `main`. GitHub must require pull requests for `main`; otherwise a direct push is also a production release. Require the check contexts `Backend Tests / Supabase database and functions` and `iOS Build / Build for iOS Simulator`, require resolved conversations, and block force pushes and branch deletion. Do not use an administrator bypass during normal development.
+
+In Codemagic, keep the GitHub webhook active under **BhargavaFamilyApp → Webhooks**. If deliveries are missing, use **Update webhook**, then inspect **Recent deliveries** before retrying a merge. Rapid successive merges cancel older webhook-triggered archives so only the newest `main` commit continues.
+
 If validation, tests, signing, or archive fails, no TestFlight upload occurs. Confirm the build in App Store Connect and assign beta testers deliberately after smoke testing.
 
 Both Codemagic workflows wait for the GitHub **Backend Tests** workflow to pass at the exact `CM_COMMIT` SHA before starting an iOS test or build. The repository is public, so this gate needs no additional GitHub credential; if the repository becomes private, add a read-only `GITHUB_TOKEN` to Codemagic.
