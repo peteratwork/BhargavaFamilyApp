@@ -18,6 +18,7 @@ public final class AppSession {
     public private(set) var state: State
 
     private let repository: any AuthenticationRepository
+    private var operationGeneration = 0
 
     public init(
         repository: any AuthenticationRepository,
@@ -28,16 +29,22 @@ public final class AppSession {
     }
 
     public func restore() async {
-        state = .restoring
+        let operation = beginOperation(state: .restoring)
 
         do {
-            guard try await repository.restoreSession() != nil else {
+            let restoredUser = try await repository.restoreSession()
+            guard isCurrent(operation) else { return }
+
+            guard restoredUser != nil else {
                 state = .signedOut
                 return
             }
 
-            try await routeUsingAccountAccess()
+            let destination = try await accountDestination()
+            guard isCurrent(operation) else { return }
+            state = destination
         } catch {
+            guard isCurrent(operation) else { return }
             state = .failed(.serviceUnavailable)
         }
     }
@@ -46,46 +53,67 @@ public final class AppSession {
         let email = rawEmail
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased(with: Locale(identifier: "en_US_POSIX"))
-        state = .requestingOTP(email: email)
+        let operation = beginOperation(state: .requestingOTP(email: email))
 
         do {
             try await repository.requestEmailOTP(email)
+            guard isCurrent(operation) else { return }
             state = .awaitingEmail(email: email)
         } catch {
+            guard isCurrent(operation) else { return }
             state = .failed(.requestFailed)
         }
     }
 
     public func handleCallback(_ url: URL) async {
-        state = .restoring
+        let operation = beginOperation(state: .restoring)
 
         do {
             _ = try await repository.handleCallback(url)
-            try await routeUsingAccountAccess()
+            guard isCurrent(operation) else { return }
+
+            let destination = try await accountDestination()
+            guard isCurrent(operation) else { return }
+            state = destination
         } catch {
+            guard isCurrent(operation) else { return }
             state = .failed(.authenticationFailed)
         }
     }
 
     public func signOut() async {
+        let operation = beginOperation(state: state)
+
         do {
             try await repository.signOut()
+            guard isCurrent(operation) else { return }
             state = .signedOut
         } catch {
+            guard isCurrent(operation) else { return }
             state = .failed(.serviceUnavailable)
         }
     }
 
-    private func routeUsingAccountAccess() async throws {
+    private func accountDestination() async throws -> State {
         let access = try await repository.fetchAccountAccess()
 
         switch access.status {
         case .pending:
-            state = .pendingClaim
+            return .pendingClaim
         case .approved:
-            state = .approved(access)
+            return .approved(access)
         case .suspended, .closed:
-            state = .blocked
+            return .blocked
         }
+    }
+
+    private func beginOperation(state nextState: State) -> Int {
+        operationGeneration &+= 1
+        state = nextState
+        return operationGeneration
+    }
+
+    private func isCurrent(_ operation: Int) -> Bool {
+        operation == operationGeneration
     }
 }
