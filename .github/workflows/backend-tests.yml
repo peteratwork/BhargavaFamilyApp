@@ -32,7 +32,9 @@ jobs:
         run: npm ci
 
       - name: Start local Supabase
-        run: npx supabase start
+        run: >-
+          npx supabase start
+          --exclude analytics,edge-runtime,functions,imgproxy,inbucket,kong,meta,realtime,rest,storage,studio,vector
 
       - name: Rebuild database from migrations
         run: npx supabase db reset
