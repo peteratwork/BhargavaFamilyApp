@@ -30,7 +30,11 @@ let package = Package(
         .testTarget(name: "BhargavaCoreTests", dependencies: ["BhargavaCore"]),
         .testTarget(
             name: "BhargavaSupabaseTests",
-            dependencies: ["BhargavaCore", "BhargavaSupabase"]
+            dependencies: [
+                "BhargavaCore",
+                "BhargavaSupabase",
+                .product(name: "Supabase", package: "supabase-swift")
+            ]
         )
     ]
 )

@@ -1,9 +1,19 @@
 import BhargavaCore
 import Foundation
+import Supabase
 import XCTest
 @testable import BhargavaSupabase
 
 final class SupabaseAuthenticationRepositoryTests: XCTestCase {
+    func testServerOriginatedInviteLinksUseImplicitCallbackFlow() {
+        switch SupabaseClientConfiguration.authenticationFlowType {
+        case .implicit:
+            break
+        case .pkce:
+            XCTFail("PKCE requires a verifier from a flow initiated on this device")
+        }
+    }
+
     func testOTPRequestDisablesAccountCreationAndUsesConfiguredCallback() async throws {
         let callbackURL = try XCTUnwrap(URL(string: "bhargavafamily://auth-callback"))
         let service = StubSupabaseAuthService()
