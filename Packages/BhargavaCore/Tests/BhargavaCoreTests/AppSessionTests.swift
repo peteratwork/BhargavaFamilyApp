@@ -200,7 +200,7 @@ private final class StubAuthenticationRepository: AuthenticationRepository, @unc
         if let restoreError {
             throw restoreError
         }
-        restoredUser
+        return restoredUser
     }
 
     func requestEmailOTP(_ email: String) async throws {
