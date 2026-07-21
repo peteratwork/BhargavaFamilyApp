@@ -57,7 +57,7 @@ Both Codemagic workflows wait for the GitHub **Backend Tests** workflow to pass 
 
 The iOS app declares `ITSAppUsesNonExemptEncryption` as `NO`. At the 2026-07-20 review, application sources contained no custom cryptography, Supabase networking used the Apple URL loading stack, and the pinned `swift-crypto` dependency delegated to CryptoKit on Apple platforms rather than bundling its non-Apple BoringSSL implementation. This supports the exempt-encryption answer for the current iOS binary; the repository record is technical evidence, not legal advice.
 
-Repeat the App Store Connect export-compliance determination before release if app code begins importing cryptography APIs, a package adds `CryptoExtras` or another bundled implementation, distribution countries change, or Apple changes its questionnaire. If Apple requires documentation, set `ITSAppUsesNonExemptEncryption` to `YES` and add the approved `ITSEncryptionExportComplianceCode`; never leave an inaccurate `NO` declaration merely to keep automation green.
+Repeat the App Store Connect export-compliance determination before release if app code begins importing cryptography APIs; any cryptography dependency is added, removed, version-updated, transitive-resolution-changed, or has a linkage or product change; distribution countries change; or Apple changes its questionnaire. This includes `CryptoExtras` and another bundled implementation. If Apple requires documentation, set `ITSAppUsesNonExemptEncryption` to `YES` and add the approved `ITSEncryptionExportComplianceCode`; never leave an inaccurate `NO` declaration merely to keep automation green.
 
 ## Operational checks
 
