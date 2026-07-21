@@ -64,4 +64,18 @@ final class AppConfigurationTests: XCTestCase {
             )
         }
     }
+
+    func testRejectsLegacyServiceRoleJWT() {
+        let serviceRoleJWT = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.not-a-signature"
+
+        XCTAssertThrowsError(try AppConfiguration(values: [
+            "SUPABASE_URL": "https://family.supabase.co",
+            "SUPABASE_PUBLISHABLE_KEY": serviceRoleJWT
+        ])) { error in
+            XCTAssertEqual(
+                error as? AppConfiguration.ConfigurationError,
+                .invalid("SUPABASE_PUBLISHABLE_KEY")
+            )
+        }
+    }
 }

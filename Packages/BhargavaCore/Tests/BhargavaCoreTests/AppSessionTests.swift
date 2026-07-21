@@ -93,6 +93,19 @@ final class AppSessionTests: XCTestCase {
         XCTAssertEqual(session.state, .awaitingEmail(email: "member@example.com"))
     }
 
+    func testOTPRequestFailureDoesNotRevealWhetherInvitationExists() async {
+        let repository = StubAuthenticationRepository(
+            restoredUser: nil,
+            requestError: StubError.requestFailed
+        )
+        let session = AppSession(repository: repository, initialState: .signedOut)
+
+        await session.requestOTP(email: "unknown@example.com")
+
+        XCTAssertEqual(repository.requestedEmails, ["unknown@example.com"])
+        XCTAssertEqual(session.state, .awaitingEmail(email: "unknown@example.com"))
+    }
+
     func testInvalidEmailDoesNotReachRepository() async {
         let repository = StubAuthenticationRepository(restoredUser: nil)
         let session = AppSession(repository: repository, initialState: .signedOut)
@@ -183,17 +196,20 @@ private final class StubAuthenticationRepository: AuthenticationRepository, @unc
     let restoredUser: AuthenticatedUser?
     var accountAccess: AccountAccess
     let restoreError: Error?
+    let requestError: Error?
     var requestedEmails: [String] = []
     var didSignOut = false
 
     init(
         restoredUser: AuthenticatedUser?,
         accountAccess: AccountAccess = .init(status: .pending, role: .member, personID: nil),
-        restoreError: Error? = nil
+        restoreError: Error? = nil,
+        requestError: Error? = nil
     ) {
         self.restoredUser = restoredUser
         self.accountAccess = accountAccess
         self.restoreError = restoreError
+        self.requestError = requestError
     }
 
     func restoreSession() async throws -> AuthenticatedUser? {
@@ -205,6 +221,9 @@ private final class StubAuthenticationRepository: AuthenticationRepository, @unc
 
     func requestEmailOTP(_ email: String) async throws {
         requestedEmails.append(email)
+        if let requestError {
+            throw requestError
+        }
     }
 
     func handleCallback(_ url: URL) async throws -> AuthenticatedUser {
@@ -218,4 +237,8 @@ private final class StubAuthenticationRepository: AuthenticationRepository, @unc
     func signOut() async throws {
         didSignOut = true
     }
+}
+
+private enum StubError: Error {
+    case requestFailed
 }
