@@ -51,6 +51,38 @@ final class AppSessionTests: XCTestCase {
         XCTAssertEqual(session.state, .blocked)
     }
 
+    func testPendingAccountRefreshRoutesToApprovedContentAfterReview() async {
+        let repository = StubAuthenticationRepository(
+            restoredUser: .init(userID: UUID(), email: "member@example.com"),
+            accountAccess: .init(status: .pending, role: .member, personID: nil)
+        )
+        let session = AppSession(repository: repository)
+        await session.restore()
+        let approvedAccess = AccountAccess(
+            status: .approved,
+            role: .member,
+            personID: UUID()
+        )
+        repository.accountAccess = approvedAccess
+
+        await session.refreshAccount()
+
+        XCTAssertEqual(session.state, .approved(approvedAccess))
+    }
+
+    func testExpiredRestoredSessionSignsOutAndRoutesToSignedOut() async {
+        let repository = StubAuthenticationRepository(
+            restoredUser: .init(userID: UUID(), email: "member@example.com"),
+            restoreError: AuthenticationRepositoryError.sessionExpired
+        )
+        let session = AppSession(repository: repository)
+
+        await session.restore()
+
+        XCTAssertTrue(repository.didSignOut)
+        XCTAssertEqual(session.state, .signedOut)
+    }
+
     func testRequestOTPNormalizesEmailAndWaitsForCallback() async {
         let repository = StubAuthenticationRepository(restoredUser: nil)
         let session = AppSession(repository: repository)
@@ -149,19 +181,25 @@ private actor DelayedAuthenticationRepository: AuthenticationRepository {
 
 private final class StubAuthenticationRepository: AuthenticationRepository, @unchecked Sendable {
     let restoredUser: AuthenticatedUser?
-    let accountAccess: AccountAccess
+    var accountAccess: AccountAccess
+    let restoreError: Error?
     var requestedEmails: [String] = []
     var didSignOut = false
 
     init(
         restoredUser: AuthenticatedUser?,
-        accountAccess: AccountAccess = .init(status: .pending, role: .member, personID: nil)
+        accountAccess: AccountAccess = .init(status: .pending, role: .member, personID: nil),
+        restoreError: Error? = nil
     ) {
         self.restoredUser = restoredUser
         self.accountAccess = accountAccess
+        self.restoreError = restoreError
     }
 
     func restoreSession() async throws -> AuthenticatedUser? {
+        if let restoreError {
+            throw restoreError
+        }
         restoredUser
     }
 
