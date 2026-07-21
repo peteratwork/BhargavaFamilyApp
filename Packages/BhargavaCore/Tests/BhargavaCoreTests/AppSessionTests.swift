@@ -74,6 +74,57 @@ final class AppSessionTests: XCTestCase {
         XCTAssertTrue(repository.didSignOut)
         XCTAssertEqual(session.state, .signedOut)
     }
+
+    func testCompletedOTPRequestDoesNotOverwriteNewerSignOut() async {
+        let repository = DelayedAuthenticationRepository()
+        let session = AppSession(repository: repository)
+
+        let request = Task {
+            await session.requestOTP(email: "member@example.com")
+        }
+        await repository.waitForOTPRequest()
+
+        await session.signOut()
+        await repository.completeOTPRequest()
+        await request.value
+
+        XCTAssertEqual(session.state, .signedOut)
+    }
+}
+
+private actor DelayedAuthenticationRepository: AuthenticationRepository {
+    private var otpContinuation: CheckedContinuation<Void, Error>?
+
+    func restoreSession() async throws -> AuthenticatedUser? {
+        nil
+    }
+
+    func requestEmailOTP(_ email: String) async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            otpContinuation = continuation
+        }
+    }
+
+    func handleCallback(_ url: URL) async throws -> AuthenticatedUser {
+        .init(userID: UUID(), email: "member@example.com")
+    }
+
+    func fetchAccountAccess() async throws -> AccountAccess {
+        .init(status: .approved, role: .member, personID: UUID())
+    }
+
+    func signOut() async throws {}
+
+    func waitForOTPRequest() async {
+        while otpContinuation == nil {
+            await Task.yield()
+        }
+    }
+
+    func completeOTPRequest() {
+        otpContinuation?.resume()
+        otpContinuation = nil
+    }
 }
 
 private final class StubAuthenticationRepository: AuthenticationRepository, @unchecked Sendable {
