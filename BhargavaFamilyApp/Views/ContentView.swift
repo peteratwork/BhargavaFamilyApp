@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject private var intentRouter: AppIntentRouter
     @State private var selectedTab: AppTab = .home
+    let onSignOut: () -> Void
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -22,7 +23,7 @@ struct ContentView: View {
                 .tabItem { Label(AppTab.meetups.title, systemImage: AppTab.meetups.symbol) }
                 .tag(AppTab.meetups)
 
-            ProfileView()
+            ProfileView(onSignOut: onSignOut)
                 .tabItem { Label(AppTab.profile.title, systemImage: AppTab.profile.symbol) }
                 .tag(AppTab.profile)
         }
@@ -182,6 +183,7 @@ struct MeetupsView: View {
 
 struct ProfileView: View {
     @EnvironmentObject private var store: FamilyStore
+    let onSignOut: () -> Void
 
     var body: some View {
         NavigationStack {
@@ -191,6 +193,10 @@ struct ProfileView: View {
                     LabeledContent("City", value: store.currentMember.city)
                     LabeledContent("Phone", value: store.currentMember.phoneNumber)
                     LabeledContent("Verification", value: store.currentMember.verificationStatus.label)
+                }
+
+                Section {
+                    Button("Sign out", role: .destructive, action: onSignOut)
                 }
 
                 Section {
@@ -344,7 +350,7 @@ struct SectionHeader: View {
 }
 
 #Preview {
-    ContentView()
+    ContentView(onSignOut: {})
         .environmentObject(FamilyStore())
         .environmentObject(AppIntentRouter.shared)
 }

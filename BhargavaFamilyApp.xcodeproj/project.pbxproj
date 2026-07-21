@@ -15,6 +15,13 @@
 		5A0000010000000000000006 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A0000010000000000000106 /* ContentView.swift */; };
 		5A0000010000000000000007 /* FamilyAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A0000010000000000000107 /* FamilyAppIntents.swift */; };
 		5A0000010000000000000008 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5A0000010000000000000108 /* Assets.xcassets */; };
+		5A0000010000000000000009 /* AuthenticationRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A0000010000000000000109 /* AuthenticationRootView.swift */; };
+		5A000001000000000000000A /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A000001000000000000010A /* SignInView.swift */; };
+		5A000001000000000000000B /* CheckEmailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A000001000000000000010B /* CheckEmailView.swift */; };
+		5A000001000000000000000C /* PendingClaimView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A000001000000000000010C /* PendingClaimView.swift */; };
+		5A000001000000000000000D /* ConfigurationUnavailableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A000001000000000000010D /* ConfigurationUnavailableView.swift */; };
+		5A000001000000000000000E /* BhargavaCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5A0000010000000000001001 /* BhargavaCore */; };
+		5A000001000000000000000F /* BhargavaSupabase in Frameworks */ = {isa = PBXBuildFile; productRef = 5A0000010000000000001002 /* BhargavaSupabase */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,6 +34,12 @@
 		5A0000010000000000000106 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/ContentView.swift; sourceTree = "<group>"; };
 		5A0000010000000000000107 /* FamilyAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Intents/FamilyAppIntents.swift; sourceTree = "<group>"; };
 		5A0000010000000000000108 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		5A0000010000000000000109 /* AuthenticationRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Authentication/AuthenticationRootView.swift; sourceTree = "<group>"; };
+		5A000001000000000000010A /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Authentication/SignInView.swift; sourceTree = "<group>"; };
+		5A000001000000000000010B /* CheckEmailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Authentication/CheckEmailView.swift; sourceTree = "<group>"; };
+		5A000001000000000000010C /* PendingClaimView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Authentication/PendingClaimView.swift; sourceTree = "<group>"; };
+		5A000001000000000000010D /* ConfigurationUnavailableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Configuration/ConfigurationUnavailableView.swift; sourceTree = "<group>"; };
+		5A000001000000000000010E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -34,6 +47,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5A000001000000000000000E /* BhargavaCore in Frameworks */,
+				5A000001000000000000000F /* BhargavaSupabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -59,6 +74,12 @@
 				5A0000010000000000000106 /* ContentView.swift */,
 				5A0000010000000000000107 /* FamilyAppIntents.swift */,
 				5A0000010000000000000108 /* Assets.xcassets */,
+				5A0000010000000000000109 /* AuthenticationRootView.swift */,
+				5A000001000000000000010A /* SignInView.swift */,
+				5A000001000000000000010B /* CheckEmailView.swift */,
+				5A000001000000000000010C /* PendingClaimView.swift */,
+				5A000001000000000000010D /* ConfigurationUnavailableView.swift */,
+				5A000001000000000000010E /* Info.plist */,
 			);
 			path = BhargavaFamilyApp;
 			sourceTree = "<group>";
@@ -87,6 +108,10 @@
 			dependencies = (
 			);
 			name = BhargavaFamilyApp;
+			packageProductDependencies = (
+				5A0000010000000000001001 /* BhargavaCore */,
+				5A0000010000000000001002 /* BhargavaSupabase */,
+			);
 			productName = BhargavaFamilyApp;
 			productReference = 5A0000010000000000000100 /* BhargavaFamilyApp.app */;
 			productType = "com.apple.product-type.application";
@@ -115,6 +140,9 @@
 				Base,
 			);
 			mainGroup = 5A0000010000000000000300;
+			packageReferences = (
+				5A0000010000000000001100 /* XCLocalSwiftPackageReference "Packages/BhargavaCore" */,
+			);
 			productRefGroup = 5A0000010000000000000302 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -147,6 +175,11 @@
 				5A0000010000000000000005 /* SampleFamily.swift in Sources */,
 				5A0000010000000000000006 /* ContentView.swift in Sources */,
 				5A0000010000000000000007 /* FamilyAppIntents.swift in Sources */,
+				5A0000010000000000000009 /* AuthenticationRootView.swift in Sources */,
+				5A000001000000000000000A /* SignInView.swift in Sources */,
+				5A000001000000000000000B /* CheckEmailView.swift in Sources */,
+				5A000001000000000000000C /* PendingClaimView.swift in Sources */,
+				5A000001000000000000000D /* ConfigurationUnavailableView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -271,7 +304,8 @@
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BhargavaFamilyApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Bhargava Family";
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
@@ -305,7 +339,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BhargavaFamilyApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Bhargava Family";
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
@@ -353,6 +388,26 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		5A0000010000000000001100 /* XCLocalSwiftPackageReference "Packages/BhargavaCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/BhargavaCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5A0000010000000000001001 /* BhargavaCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A0000010000000000001100 /* XCLocalSwiftPackageReference "Packages/BhargavaCore" */;
+			productName = BhargavaCore;
+		};
+		5A0000010000000000001002 /* BhargavaSupabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A0000010000000000001100 /* XCLocalSwiftPackageReference "Packages/BhargavaCore" */;
+			productName = BhargavaSupabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 5A0000010000000000000700 /* Project object */;
 }
