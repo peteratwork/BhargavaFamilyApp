@@ -193,3 +193,148 @@ on public.claims
 for select
 to authenticated
 using (claimant_user_id = auth.uid());
+
+create or replace function public.create_invitation_record(
+  p_target_person_id uuid,
+  p_normalized_email text,
+  p_actor_user_id uuid,
+  p_token_hash text
+)
+returns table(invitation_id uuid, expires_at timestamptz)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_invitation_id uuid;
+  v_expires_at timestamptz;
+  v_lifetime_hours integer;
+begin
+  if not exists (
+    select 1
+    from public.accounts a
+    where a.user_id = p_actor_user_id
+      and a.status = 'approved'
+      and a.role in ('trusted_elder', 'admin')
+  ) then
+    raise exception 'not_authorized' using errcode = 'P0001';
+  end if;
+
+  if not exists (
+    select 1
+    from public.people p
+    where p.id = p_target_person_id
+      and p.is_verified
+  ) or exists (
+    select 1 from public.accounts a where a.person_id = p_target_person_id
+  ) or exists (
+    select 1
+    from public.invitations i
+    where i.target_person_id = p_target_person_id
+      and i.status = 'pending'
+  ) then
+    raise exception 'target_unavailable' using errcode = 'P0001';
+  end if;
+
+  select p.invitation_lifetime_hours
+  into strict v_lifetime_hours
+  from public.app_policies p
+  where p.singleton;
+
+  v_invitation_id := gen_random_uuid();
+  v_expires_at := now() + make_interval(hours => v_lifetime_hours);
+
+  insert into public.invitations (
+    id,
+    invited_email,
+    target_person_id,
+    invited_by,
+    token_hash,
+    expires_at
+  ) values (
+    v_invitation_id,
+    lower(btrim(p_normalized_email)),
+    p_target_person_id,
+    p_actor_user_id,
+    p_token_hash,
+    v_expires_at
+  );
+
+  insert into public.audit_events (
+    actor_user_id,
+    action,
+    target_type,
+    target_id,
+    outcome
+  ) values (
+    p_actor_user_id,
+    'invitation.created',
+    'person',
+    p_target_person_id,
+    'succeeded'
+  );
+
+  return query select v_invitation_id, v_expires_at;
+end;
+$$;
+
+create or replace function public.revoke_invitation_after_delivery_failure(
+  p_invitation_id uuid,
+  p_actor_user_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_target_person_id uuid;
+begin
+  if not exists (
+    select 1
+    from public.accounts a
+    where a.user_id = p_actor_user_id
+      and a.status = 'approved'
+      and a.role in ('trusted_elder', 'admin')
+  ) then
+    raise exception 'not_authorized' using errcode = 'P0001';
+  end if;
+
+  update public.invitations
+  set status = 'revoked'
+  where id = p_invitation_id
+    and invited_by = p_actor_user_id
+    and status = 'pending'
+  returning target_person_id into v_target_person_id;
+
+  if v_target_person_id is null then
+    raise exception 'invitation_unavailable' using errcode = 'P0001';
+  end if;
+
+  insert into public.audit_events (
+    actor_user_id,
+    action,
+    target_type,
+    target_id,
+    outcome,
+    metadata
+  ) values (
+    p_actor_user_id,
+    'invitation.delivery_failed',
+    'invitation',
+    p_invitation_id,
+    'failed',
+    jsonb_build_object('target_person_id', v_target_person_id)
+  );
+end;
+$$;
+
+revoke all on function public.create_invitation_record(uuid, text, uuid, text)
+from public, anon, authenticated;
+revoke all on function public.revoke_invitation_after_delivery_failure(uuid, uuid)
+from public, anon, authenticated;
+
+grant execute on function public.create_invitation_record(uuid, text, uuid, text)
+to service_role;
+grant execute on function public.revoke_invitation_after_delivery_failure(uuid, uuid)
+to service_role;
