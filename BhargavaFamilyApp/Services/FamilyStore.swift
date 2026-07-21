@@ -8,10 +8,23 @@ final class FamilyStore: ObservableObject {
     @Published var meetups: [MeetupEvent]
     @Published var signupDraft = SignupDraft()
 
-    init() {
-        members = SampleFamily.members
-        currentMemberID = "aanya"
-        meetups = SampleFamily.meetups
+    init(
+        members: [FamilyMember],
+        currentMemberID: String,
+        meetups: [MeetupEvent]
+    ) {
+        precondition(members.contains { $0.id == currentMemberID })
+        self.members = members
+        self.currentMemberID = currentMemberID
+        self.meetups = meetups
+    }
+
+    static func preview() -> FamilyStore {
+        FamilyStore(
+            members: SampleFamily.members,
+            currentMemberID: "aanya",
+            meetups: SampleFamily.meetups
+        )
     }
 
     var currentMember: FamilyMember {

@@ -39,15 +39,18 @@ struct AuthenticationRootView: View {
 
 private struct ApprovedFamilyRootView: View {
     let session: AppSession
-    @StateObject private var familyStore = FamilyStore()
-    @StateObject private var intentRouter = AppIntentRouter.shared
 
     var body: some View {
-        ContentView {
-            Task { await session.signOut() }
+        ContentUnavailableView {
+            Label("Membership approved", systemImage: "checkmark.seal.fill")
+        } description: {
+            Text("Your secure family view will appear after the verified family-data service is connected. No sample records are shown in production.")
+        } actions: {
+            Button("Sign out") {
+                Task { await session.signOut() }
+            }
+            .buttonStyle(.bordered)
         }
-        .environmentObject(familyStore)
-        .environmentObject(intentRouter)
         .privacySensitive()
     }
 }

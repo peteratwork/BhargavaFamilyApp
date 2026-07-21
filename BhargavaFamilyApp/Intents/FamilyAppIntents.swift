@@ -80,17 +80,10 @@ struct NearbyRelativeQuery: EntityQuery {
     }
 
     func suggestedEntities() async throws -> [NearbyRelativeEntity] {
-        await MainActor.run {
-            let store = FamilyStore()
-            return store.nearbyRelationships().map {
-                NearbyRelativeEntity(
-                    id: $0.member.id,
-                    name: $0.member.fullName,
-                    relationship: $0.title,
-                    city: $0.member.city
-                )
-            }
-        }
+        // Production relationship results require an approved authenticated session.
+        // App Intents do not yet share that session, so fail closed until the family-data
+        // repository is connected in the next implementation phase.
+        []
     }
 }
 

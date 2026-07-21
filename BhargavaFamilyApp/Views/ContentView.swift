@@ -351,6 +351,6 @@ struct SectionHeader: View {
 
 #Preview {
     ContentView(onSignOut: {})
-        .environmentObject(FamilyStore())
+        .environmentObject(FamilyStore.preview())
         .environmentObject(AppIntentRouter.shared)
 }
