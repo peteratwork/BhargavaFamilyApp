@@ -1,5 +1,9 @@
 import Foundation
 
+public enum AuthenticationRepositoryError: Error, Equatable, Sendable {
+    case sessionExpired
+}
+
 public protocol AuthenticationRepository: Sendable {
     func restoreSession() async throws -> AuthenticatedUser?
     func requestEmailOTP(_ email: String) async throws

@@ -54,23 +54,41 @@ public actor SupabaseAuthenticationRepository: AuthenticationRepository {
     }
 
     public func restoreSession() async throws -> AuthenticatedUser? {
-        try await service.restoreUser().map(Self.mapUser)
+        do {
+            guard let remoteUser = try await service.restoreUser() else { return nil }
+            return Self.mapUser(remoteUser)
+        } catch {
+            throw Self.mapServiceError(error)
+        }
     }
 
     public func requestEmailOTP(_ email: String) async throws {
-        try await service.requestEmailOTP(
-            email: email,
-            redirectTo: callbackURL,
-            shouldCreateUser: false
-        )
+        do {
+            try await service.requestEmailOTP(
+                email: email,
+                redirectTo: callbackURL,
+                shouldCreateUser: false
+            )
+        } catch {
+            throw Self.mapServiceError(error)
+        }
     }
 
     public func handleCallback(_ url: URL) async throws -> AuthenticatedUser {
-        Self.mapUser(try await service.user(from: url))
+        do {
+            return Self.mapUser(try await service.user(from: url))
+        } catch {
+            throw Self.mapServiceError(error)
+        }
     }
 
     public func fetchAccountAccess() async throws -> AccountAccess {
-        let remote = try await service.fetchAccountAccess()
+        let remote: RemoteAccountAccess
+        do {
+            remote = try await service.fetchAccountAccess()
+        } catch {
+            throw Self.mapServiceError(error)
+        }
 
         guard let status = AccountStatus(rawValue: remote.status) else {
             throw MappingError.invalidStatus(remote.status)
@@ -83,11 +101,43 @@ public actor SupabaseAuthenticationRepository: AuthenticationRepository {
     }
 
     public func signOut() async throws {
-        try await service.signOut()
+        do {
+            try await service.signOut()
+        } catch {
+            throw Self.mapServiceError(error)
+        }
     }
 
     private static func mapUser(_ user: RemoteAuthenticatedUser) -> AuthenticatedUser {
         AuthenticatedUser(userID: user.userID, email: user.email)
+    }
+
+    private static func mapServiceError(_ error: Error) -> Error {
+        if case AuthError.sessionMissing = error {
+            return AuthenticationRepositoryError.sessionExpired
+        }
+
+        if case let AuthError.api(_, errorCode, _, response) = error,
+           response.statusCode == 401 || [
+               .sessionNotFound,
+               .sessionExpired,
+               .refreshTokenNotFound,
+               .refreshTokenAlreadyUsed
+           ].contains(errorCode) {
+            return AuthenticationRepositoryError.sessionExpired
+        }
+
+        if let error = error as? HTTPError, error.response.statusCode == 401 {
+            return AuthenticationRepositoryError.sessionExpired
+        }
+
+        if let error = error as? PostgrestError,
+           let code = error.code,
+           ["PGRST301", "PGRST302"].contains(code) {
+            return AuthenticationRepositoryError.sessionExpired
+        }
+
+        return error
     }
 }
 

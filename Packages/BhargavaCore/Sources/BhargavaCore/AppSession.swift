@@ -43,6 +43,23 @@ public final class AppSession {
             let destination = try await accountDestination()
             guard isCurrent(operation) else { return }
             state = destination
+        } catch AuthenticationRepositoryError.sessionExpired {
+            await expireSession(operation: operation)
+        } catch {
+            guard isCurrent(operation) else { return }
+            state = .failed(.serviceUnavailable)
+        }
+    }
+
+    public func refreshAccount() async {
+        let operation = beginOperation(state: .restoring)
+
+        do {
+            let destination = try await accountDestination()
+            guard isCurrent(operation) else { return }
+            state = destination
+        } catch AuthenticationRepositoryError.sessionExpired {
+            await expireSession(operation: operation)
         } catch {
             guard isCurrent(operation) else { return }
             state = .failed(.serviceUnavailable)
@@ -117,5 +134,12 @@ public final class AppSession {
 
     private func isCurrent(_ operation: Int) -> Bool {
         operation == operationGeneration
+    }
+
+    private func expireSession(operation: Int) async {
+        guard isCurrent(operation) else { return }
+        try? await repository.signOut()
+        guard isCurrent(operation) else { return }
+        state = .signedOut
     }
 }
