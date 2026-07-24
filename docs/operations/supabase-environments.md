@@ -17,7 +17,7 @@ Before inviting real users:
 2. Enable backups appropriate to the Pro plan and verify that an operator can locate the latest backup.
 3. Configure the iOS redirect URL `bhargavafamily://auth-callback`.
 4. Keep public sign-up disabled. Invitations must be created by the protected server function.
-5. Configure production SMTP with SPF, DKIM, and DMARC. Disable link tracking that rewrites authentication links.
+5. For the private beta only, configure the dedicated Gmail SMTP route exactly as documented in [Private-beta email OTP operations](beta-email-otp.md). This is a temporary exception to the domain-authenticated production requirement. Before broader rollout, migrate to a transactional provider with SPF, DKIM, and DMARC; disable link tracking that rewrites authentication links.
 6. Under **Authentication → Sign In / Providers → Email**, set Email OTP expiration to `3600` seconds and the resend cooldown to `60` seconds. Keep `app_policies.invitation_lifetime_hours` at `1`; invite links use the same Auth expiry clock.
 7. Customize the Invite template with `{{ .ConfirmationURL }}` for the initial administrator-issued invitation link. Customize the Magic Link template with `{{ .Token }}` so an in-app sign-in request sends the six-digit OTP accepted by the code-entry screen. Send and redeem both message types through the production SMTP route before inviting users.
 8. Start with 30 email/OTP sends per hour and the 60-second per-address cooldown, then tune only from sanitized `429` telemetry. Record every dashboard change in the deployment record.

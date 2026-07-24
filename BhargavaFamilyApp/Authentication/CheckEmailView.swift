@@ -11,7 +11,7 @@ struct CheckEmailView: View {
         ContentUnavailableView {
             Label("Enter your email code", systemImage: "number.square")
         } description: {
-            Text("Enter the six-digit code sent to \(email). The message is the same whether or not an invitation is active.")
+            Text("If this email has an active invitation, a six-digit code will arrive at \(email). Check spam or junk mail before requesting another code.")
         } actions: {
             VStack(spacing: 12) {
                 TextField("6-digit code", text: $code)
